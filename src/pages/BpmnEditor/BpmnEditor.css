@@ -28,6 +28,35 @@
   flex-wrap: wrap;
 }
 
+.bpmn-annual-count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #fff;
+  font-size: 13px;
+  white-space: nowrap;
+  margin-right: 8px;
+}
+
+.bpmn-annual-count span {
+  color: #94a3b8;
+}
+
+.bpmn-annual-count input {
+  width: 90px;
+  padding: 6px 8px;
+  font-size: 13px;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  background: #334155;
+  color: #fff;
+  outline: none;
+}
+
+.bpmn-annual-count input:focus {
+  border-color: #1971ff;
+}
+
 .bpmn-topbar button {
   background: #334155;
   color: #fff;

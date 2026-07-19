@@ -17,7 +17,7 @@ const LABEL_LINE_HEIGHT = 14
 const ELEMENT_DEFAULTS = {
   startEvent: { width: 40, height: 40, label: '開始' },
   endEvent: { width: 40, height: 40, label: '終了' },
-  task: { width: 120, height: 60, label: 'タスク' },
+  task: { width: 120, height: 60, label: 'タスク', time: 0 },
   gateway: { width: 50, height: 50, label: '' },
   note: { width: 140, height: 80, label: 'メモ' },
 }
@@ -39,7 +39,7 @@ function nextId(prefix) {
 
 // Number input that only commits on blur/Enter, so retyping a value doesn't
 // resize the shape (and clamp to `min`) after every keystroke.
-function NumberField({ label, value, min, onCommit }) {
+function NumberField({ label, value, min, onCommit, className = 'bpmn-properties-field' }) {
   const [draft, setDraft] = useState(String(value))
 
   useEffect(() => {
@@ -55,7 +55,7 @@ function NumberField({ label, value, min, onCommit }) {
   }
 
   return (
-    <label className="bpmn-properties-field">
+    <label className={className}>
       <span>{label}</span>
       <input
         type="number"
@@ -254,6 +254,7 @@ function BpmnEditor() {
   const [elements, setElements] = useState(initial?.elements ?? [])
   const [connections, setConnections] = useState(initial?.connections ?? [])
   const [lanes, setLanes] = useState(initial?.lanes ?? [])
+  const [annualCount, setAnnualCount] = useState(initial?.annualCount ?? 0)
   const [connectMode, setConnectMode] = useState(false)
   const [connectStyle, setConnectStyle] = useState('straight')
   const [connectSource, setConnectSource] = useState(null)
@@ -268,8 +269,8 @@ function BpmnEditor() {
   const suppressClickRef = useRef(false)
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ elements, connections, lanes }))
-  }, [elements, connections, lanes])
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ elements, connections, lanes, annualCount }))
+  }, [elements, connections, lanes, annualCount])
 
   useEffect(() => {
     if (!drag) return undefined
@@ -366,6 +367,7 @@ function BpmnEditor() {
       width: defaults.width,
       height: defaults.height,
       label: defaults.label,
+      ...(type === 'task' ? { time: defaults.time } : {}),
     }
     setElements((prev) => [...prev, newEl])
     setSelection({ kind: 'element', id: newEl.id })
@@ -540,7 +542,7 @@ function BpmnEditor() {
   }
 
   function handleExportJson() {
-    const data = JSON.stringify({ elements, connections, lanes }, null, 2)
+    const data = JSON.stringify({ elements, connections, lanes, annualCount }, null, 2)
     const blob = new Blob([data], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -575,6 +577,7 @@ function BpmnEditor() {
           setElements(parsed.elements)
           setConnections(parsed.connections)
           setLanes(parsed.lanes ?? [])
+          setAnnualCount(parsed.annualCount ?? 0)
           setSelection(null)
         } else {
           alert('JSONの形式が不正です')
@@ -588,11 +591,12 @@ function BpmnEditor() {
   }
 
   function handleClear() {
-    if (elements.length === 0 && connections.length === 0 && lanes.length === 0) return
+    if (elements.length === 0 && connections.length === 0 && lanes.length === 0 && annualCount === 0) return
     if (!window.confirm('全ての要素を削除しますか？')) return
     setElements([])
     setConnections([])
     setLanes([])
+    setAnnualCount(0)
     setSelection(null)
   }
 
@@ -629,6 +633,13 @@ function BpmnEditor() {
         <Link to="/" className="bpmn-back">
           ← ホーム
         </Link>
+        <NumberField
+          label="年間件数"
+          min={0}
+          value={annualCount}
+          onCommit={setAnnualCount}
+          className="bpmn-annual-count"
+        />
         <div className="bpmn-actions">
           <button type="button" onClick={handleExportJson}>
             JSONエクスポート
@@ -1017,6 +1028,14 @@ function BpmnEditor() {
                       onCommit={(height) => updateElement(selectedElement.id, { height })}
                     />
                   </>
+                )}
+                {selectedElement.type === 'task' && (
+                  <NumberField
+                    label="時間(分)"
+                    min={0}
+                    value={selectedElement.time ?? 0}
+                    onCommit={(time) => updateElement(selectedElement.id, { time })}
+                  />
                 )}
                 <NumberField
                   label="X座標"
