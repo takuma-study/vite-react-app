@@ -6,6 +6,8 @@ const STORAGE_KEY = 'bpmn-editor-data'
 const CANVAS_WIDTH = 1800
 const CANVAS_HEIGHT = 1100
 const DRAG_DATA_TYPE = 'application/bpmn-tool'
+const RATIO_MIN = 0.05
+const RATIO_MAX = 0.95
 
 const ELEMENT_DEFAULTS = {
   startEvent: { width: 40, height: 40, label: '開始' },
@@ -85,6 +87,67 @@ function getBoundaryPoint(el, towardX, towardY) {
   return { x: cx + dx * scale, y: cy + dy * scale }
 }
 
+// Boundary point straight out from the element's center in one cardinal direction.
+function getSidePoint(el, side) {
+  const cx = el.x + el.width / 2
+  const cy = el.y + el.height / 2
+  switch (side) {
+    case 'right':
+      return getBoundaryPoint(el, cx + 1000, cy)
+    case 'left':
+      return getBoundaryPoint(el, cx - 1000, cy)
+    case 'down':
+      return getBoundaryPoint(el, cx, cy + 1000)
+    default:
+      return getBoundaryPoint(el, cx, cy - 1000)
+  }
+}
+
+// Picks perpendicular exit/entry sides for an elbow connector, PowerPoint-style:
+// shapes offset mostly horizontally connect left/right, mostly vertically connect top/bottom.
+function getElbowLayout(from, to) {
+  const fromCenter = { x: from.x + from.width / 2, y: from.y + from.height / 2 }
+  const toCenter = { x: to.x + to.width / 2, y: to.y + to.height / 2 }
+  const dx = toCenter.x - fromCenter.x
+  const dy = toCenter.y - fromCenter.y
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    const fromSide = dx >= 0 ? 'right' : 'left'
+    const toSide = dx >= 0 ? 'left' : 'right'
+    return { axis: 'x', fromPoint: getSidePoint(from, fromSide), toPoint: getSidePoint(to, toSide) }
+  }
+  const fromSide = dy >= 0 ? 'down' : 'up'
+  const toSide = dy >= 0 ? 'up' : 'down'
+  return { axis: 'y', fromPoint: getSidePoint(from, fromSide), toPoint: getSidePoint(to, toSide) }
+}
+
+function getElbowSegments(axis, fromPoint, toPoint, ratio) {
+  if (axis === 'x') {
+    const midX = fromPoint.x + (toPoint.x - fromPoint.x) * ratio
+    return [fromPoint, { x: midX, y: fromPoint.y }, { x: midX, y: toPoint.y }, toPoint]
+  }
+  const midY = fromPoint.y + (toPoint.y - fromPoint.y) * ratio
+  return [fromPoint, { x: fromPoint.x, y: midY }, { x: toPoint.x, y: midY }, toPoint]
+}
+
+// Returns render points + the adjustable "step" midpoint (elbow style) or line midpoint (straight style).
+function getConnectionGeometry(conn, from, to) {
+  if (conn.style === 'elbow') {
+    const { axis, fromPoint, toPoint } = getElbowLayout(from, to)
+    const ratio = conn.bendRatio ?? 0.5
+    const points = getElbowSegments(axis, fromPoint, toPoint, ratio)
+    const mid =
+      axis === 'x'
+        ? { x: fromPoint.x + (toPoint.x - fromPoint.x) * ratio, y: (fromPoint.y + toPoint.y) / 2 }
+        : { x: (fromPoint.x + toPoint.x) / 2, y: fromPoint.y + (toPoint.y - fromPoint.y) * ratio }
+    return { points, mid, axis }
+  }
+  const fromCenter = { x: from.x + from.width / 2, y: from.y + from.height / 2 }
+  const toCenter = { x: to.x + to.width / 2, y: to.y + to.height / 2 }
+  const p1 = getBoundaryPoint(from, toCenter.x, toCenter.y)
+  const p2 = getBoundaryPoint(to, fromCenter.x, fromCenter.y)
+  return { points: [p1, p2], mid: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 }, axis: null }
+}
+
 function loadInitialState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -111,6 +174,7 @@ function BpmnEditor() {
   const [dropHover, setDropHover] = useState(false)
   const [fileInputKey, setFileInputKey] = useState(0)
   const svgRef = useRef(null)
+  const suppressClickRef = useRef(false)
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ elements, connections }))
@@ -118,11 +182,30 @@ function BpmnEditor() {
 
   useEffect(() => {
     if (!drag) return undefined
+    let moved = false
 
     function onMove(e) {
       const rect = svgRef.current.getBoundingClientRect()
       const x = e.clientX - rect.left
       const y = e.clientY - rect.top
+      if (!moved && Math.hypot(x - drag.startX, y - drag.startY) >= 3) {
+        moved = true
+      }
+
+      if (drag.kind === 'elbow') {
+        if (!moved) return
+        const coord = drag.axis === 'x' ? x : y
+        const start = drag.axis === 'x' ? drag.from.x : drag.from.y
+        const end = drag.axis === 'x' ? drag.to.x : drag.to.y
+        const span = end - start
+        let ratio = span !== 0 ? (coord - start) / span : 0.5
+        ratio = Math.min(RATIO_MAX, Math.max(RATIO_MIN, ratio))
+        setConnections((prev) =>
+          prev.map((c) => (c.id === drag.id ? { ...c, style: 'elbow', bendRatio: ratio } : c)),
+        )
+        return
+      }
+
       setElements((prev) =>
         prev.map((el) =>
           el.id === drag.id ? { ...el, x: x - drag.offsetX, y: y - drag.offsetY } : el,
@@ -130,6 +213,9 @@ function BpmnEditor() {
       )
     }
     function onUp() {
+      // A drag that ends over empty canvas still fires a native click afterward;
+      // suppress the next background click so it doesn't clear the selection we just made.
+      if (moved) suppressClickRef.current = true
       setDrag(null)
     }
     window.addEventListener('mousemove', onMove)
@@ -183,8 +269,15 @@ function BpmnEditor() {
   function createConnection(fromId, toId) {
     const exists = connections.some((c) => c.from === fromId && c.to === toId)
     if (exists || fromId === toId) return
-    const newConn = { id: nextId('flow'), from: fromId, to: toId, label: '' }
+    const newConn = { id: nextId('flow'), from: fromId, to: toId, label: '', style: 'straight', bendRatio: null }
     setConnections((prev) => [...prev, newConn])
+  }
+
+  function handleStraighten() {
+    if (!selection || selection.kind !== 'connection') return
+    setConnections((prev) =>
+      prev.map((c) => (c.id === selection.id ? { ...c, style: 'straight', bendRatio: null } : c)),
+    )
   }
 
   function toggleConnectMode() {
@@ -221,6 +314,10 @@ function BpmnEditor() {
   }
 
   function handleCanvasClick(e) {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false
+      return
+    }
     if (e.target !== svgRef.current) return
     setSelection(null)
   }
@@ -232,7 +329,7 @@ function BpmnEditor() {
     const rect = svgRef.current.getBoundingClientRect()
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
-    setDrag({ id: el.id, offsetX: x - el.x, offsetY: y - el.y })
+    setDrag({ kind: 'element', id: el.id, offsetX: x - el.x, offsetY: y - el.y, startX: x, startY: y })
   }
 
   function handleElementClick(e, el) {
@@ -257,10 +354,18 @@ function BpmnEditor() {
     setEditingValue(el.label)
   }
 
-  function handleConnectionClick(e, conn) {
-    e.stopPropagation()
+  function handleConnectionMouseDown(e, conn) {
     if (connectMode) return
+    e.stopPropagation()
     setSelection({ kind: 'connection', id: conn.id })
+    const from = elements.find((el) => el.id === conn.from)
+    const to = elements.find((el) => el.id === conn.to)
+    if (!from || !to) return
+    const { axis, fromPoint, toPoint } = getElbowLayout(from, to)
+    const rect = svgRef.current.getBoundingClientRect()
+    const startX = e.clientX - rect.left
+    const startY = e.clientY - rect.top
+    setDrag({ kind: 'elbow', id: conn.id, axis, from: fromPoint, to: toPoint, startX, startY })
   }
 
   function handleConnectionDoubleClick(e, conn) {
@@ -268,6 +373,11 @@ function BpmnEditor() {
     setEditingId(conn.id)
     setEditingKind('connection')
     setEditingValue(conn.label || '')
+  }
+
+  function handleElbowHandleDoubleClick(e, connId) {
+    e.stopPropagation()
+    setConnections((prev) => prev.map((c) => (c.id === connId ? { ...c, style: 'straight', bendRatio: null } : c)))
   }
 
   function commitEdit() {
@@ -347,12 +457,13 @@ function BpmnEditor() {
     const from = elements.find((el) => el.id === editingConnection.from)
     const to = elements.find((el) => el.id === editingConnection.to)
     if (from && to) {
-      connectionEditPos = {
-        x: (from.x + from.width / 2 + to.x + to.width / 2) / 2 - 40,
-        y: (from.y + from.height / 2 + to.y + to.height / 2) / 2 - 12,
-      }
+      const { mid } = getConnectionGeometry(editingConnection, from, to)
+      connectionEditPos = { x: mid.x - 40, y: mid.y - 12 }
     }
   }
+
+  const selectedConnection =
+    selection?.kind === 'connection' ? connections.find((c) => c.id === selection.id) : null
 
   return (
     <div className="bpmn-editor">
@@ -412,6 +523,15 @@ function BpmnEditor() {
             <button type="button" className="bpmn-tool-action" onClick={deleteSelection} disabled={!selection}>
               削除
             </button>
+            <button
+              type="button"
+              className="bpmn-tool-action"
+              onClick={handleStraighten}
+              disabled={selectedConnection?.style !== 'elbow'}
+            >
+              直線に戻す
+            </button>
+            <p className="bpmn-sidebar-hint">矢印をドラッグするとカギ線に折り曲げられます</p>
           </div>
         </aside>
 
@@ -436,29 +556,46 @@ function BpmnEditor() {
               const from = elements.find((el) => el.id === conn.from)
               const to = elements.find((el) => el.id === conn.to)
               if (!from || !to) return null
-              const fromCenter = { x: from.x + from.width / 2, y: from.y + from.height / 2 }
-              const toCenter = { x: to.x + to.width / 2, y: to.y + to.height / 2 }
-              const p1 = getBoundaryPoint(from, toCenter.x, toCenter.y)
-              const p2 = getBoundaryPoint(to, fromCenter.x, fromCenter.y)
-              const midX = (p1.x + p2.x) / 2
-              const midY = (p1.y + p2.y) / 2
+              const { points: pointList, mid: labelPos, axis } = getConnectionGeometry(conn, from, to)
+              const points = pointList.map((p) => `${p.x},${p.y}`).join(' ')
               const isSelected = selection?.kind === 'connection' && selection.id === conn.id
+              const isElbow = conn.style === 'elbow'
               return (
                 <g key={conn.id}>
-                  <line
-                    x1={p1.x}
-                    y1={p1.y}
-                    x2={p2.x}
-                    y2={p2.y}
+                  <polyline
+                    points={points}
+                    fill="none"
+                    stroke="transparent"
+                    strokeWidth={12}
+                    onMouseDown={(e) => handleConnectionMouseDown(e, conn)}
+                    onDoubleClick={(e) => handleConnectionDoubleClick(e, conn)}
+                    style={{ cursor: connectMode ? 'default' : 'pointer' }}
+                  />
+                  <polyline
+                    points={points}
+                    fill="none"
                     stroke={isSelected ? '#1971ff' : '#333'}
                     strokeWidth={isSelected ? 2.5 : 1.5}
                     markerEnd="url(#arrowhead)"
-                    onClick={(e) => handleConnectionClick(e, conn)}
-                    onDoubleClick={(e) => handleConnectionDoubleClick(e, conn)}
-                    style={{ cursor: 'pointer' }}
+                    style={{ pointerEvents: 'none' }}
                   />
+                  {isSelected && isElbow && (
+                    <rect
+                      x={labelPos.x - 5}
+                      y={labelPos.y - 5}
+                      width={10}
+                      height={10}
+                      transform={`rotate(45 ${labelPos.x} ${labelPos.y})`}
+                      fill="#1971ff"
+                      stroke="#fff"
+                      strokeWidth={1.5}
+                      onMouseDown={(e) => handleConnectionMouseDown(e, conn)}
+                      onDoubleClick={(e) => handleElbowHandleDoubleClick(e, conn.id)}
+                      style={{ cursor: axis === 'x' ? 'ew-resize' : 'ns-resize' }}
+                    />
+                  )}
                   {conn.label && editingId !== conn.id && (
-                    <text x={midX} y={midY - 6} textAnchor="middle" className="bpmn-flow-label">
+                    <text x={labelPos.x} y={labelPos.y - 10} textAnchor="middle" className="bpmn-flow-label">
                       {conn.label}
                     </text>
                   )}

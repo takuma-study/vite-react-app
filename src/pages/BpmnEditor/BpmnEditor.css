@@ -154,6 +154,13 @@
   cursor: not-allowed;
 }
 
+.bpmn-sidebar-hint {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #94a3b8;
+}
+
 .bpmn-canvas-wrapper {
   position: relative;
   flex: 1;
