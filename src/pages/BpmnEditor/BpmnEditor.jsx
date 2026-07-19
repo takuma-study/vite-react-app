@@ -11,6 +11,8 @@ const RATIO_MAX = 0.95
 const LANE_DEFAULT_HEIGHT = 200
 const LANE_MIN_HEIGHT = 60
 const LANE_LABEL_WIDTH = 28
+const LABEL_FONT = '12px sans-serif'
+const LABEL_LINE_HEIGHT = 14
 
 const ELEMENT_DEFAULTS = {
   startEvent: { width: 40, height: 40, label: '開始' },
@@ -95,6 +97,44 @@ function ToolIcon({ type }) {
     default:
       return null
   }
+}
+
+let measureCtx = null
+function getMeasureContext() {
+  if (!measureCtx && typeof document !== 'undefined') {
+    measureCtx = document.createElement('canvas').getContext('2d')
+  }
+  return measureCtx
+}
+
+// Splits label text into render lines: respects manual newlines, and further
+// breaks any line wider than maxWidth character-by-character (Japanese text
+// has no spaces to word-wrap on).
+function wrapLabelLines(label, maxWidth) {
+  const paragraphs = (label ?? '').split('\n')
+  const ctx = getMeasureContext()
+  if (!ctx || !maxWidth) return paragraphs
+
+  ctx.font = LABEL_FONT
+  const lines = []
+  for (const para of paragraphs) {
+    if (para === '') {
+      lines.push('')
+      continue
+    }
+    let current = ''
+    for (const ch of para) {
+      const candidate = current + ch
+      if (current !== '' && ctx.measureText(candidate).width > maxWidth) {
+        lines.push(current)
+        current = ch
+      } else {
+        current = candidate
+      }
+    }
+    lines.push(current)
+  }
+  return lines
 }
 
 function getBoundaryPoint(el, towardX, towardY) {
@@ -773,8 +813,12 @@ function BpmnEditor() {
                     />
                   )}
                   {conn.label && editingId !== conn.id && (
-                    <text x={labelPos.x} y={labelPos.y - 10} textAnchor="middle" className="bpmn-flow-label">
-                      {conn.label}
+                    <text x={labelPos.x} textAnchor="middle" className="bpmn-flow-label">
+                      {conn.label.split('\n').map((line, i, arr) => (
+                        <tspan key={i} x={labelPos.x} y={labelPos.y - 10 - (arr.length - 1 - i) * LABEL_LINE_HEIGHT}>
+                          {line || ' '}
+                        </tspan>
+                      ))}
                     </text>
                   )}
                 </g>
@@ -836,24 +880,32 @@ function BpmnEditor() {
                       strokeWidth={isSelected || isConnectSource ? 2.5 : 1.5}
                     />
                   )}
-                  {el.label && editingId !== el.id && (
-                    <text
-                      x={cx}
-                      y={el.type === 'task' ? cy : el.y + el.height + 14}
-                      textAnchor="middle"
-                      dominantBaseline={el.type === 'task' ? 'middle' : 'auto'}
-                      className="bpmn-element-label"
-                    >
-                      {el.label}
-                    </text>
-                  )}
+                  {el.label &&
+                    editingId !== el.id &&
+                    (() => {
+                      const isTask = el.type === 'task'
+                      const lines = isTask ? wrapLabelLines(el.label, el.width - 16) : el.label.split('\n')
+                      const baseline = isTask ? 'middle' : 'auto'
+                      const startY = isTask
+                        ? cy - ((lines.length - 1) * LABEL_LINE_HEIGHT) / 2
+                        : el.y + el.height + 14
+                      return (
+                        <text x={cx} textAnchor="middle" className="bpmn-element-label">
+                          {lines.map((line, i) => (
+                            <tspan key={i} x={cx} y={startY + i * LABEL_LINE_HEIGHT} dominantBaseline={baseline}>
+                              {line || ' '}
+                            </tspan>
+                          ))}
+                        </text>
+                      )
+                    })()}
                 </g>
               )
             })}
           </svg>
 
           {editingElement && (
-            <input
+            <textarea
               className="bpmn-label-input"
               style={{
                 left: editingElement.x,
@@ -863,42 +915,42 @@ function BpmnEditor() {
                     : editingElement.y + editingElement.height + 2,
                 width: Math.max(editingElement.width, 60),
               }}
+              rows={2}
               autoFocus
               value={editingValue}
               onChange={(e) => setEditingValue(e.target.value)}
               onBlur={commitEdit}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') commitEdit()
                 if (e.key === 'Escape') cancelEdit()
               }}
             />
           )}
 
           {editingConnection && connectionEditPos && (
-            <input
+            <textarea
               className="bpmn-label-input"
               style={{ left: connectionEditPos.x, top: connectionEditPos.y, width: 80 }}
+              rows={2}
               autoFocus
               value={editingValue}
               onChange={(e) => setEditingValue(e.target.value)}
               onBlur={commitEdit}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') commitEdit()
                 if (e.key === 'Escape') cancelEdit()
               }}
             />
           )}
 
           {editingLane && laneEditPos && (
-            <input
+            <textarea
               className="bpmn-label-input"
               style={{ left: laneEditPos.x, top: laneEditPos.y, width: 120 }}
+              rows={2}
               autoFocus
               value={editingValue}
               onChange={(e) => setEditingValue(e.target.value)}
               onBlur={commitEdit}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') commitEdit()
                 if (e.key === 'Escape') cancelEdit()
               }}
             />
@@ -916,8 +968,8 @@ function BpmnEditor() {
                 </div>
                 <label className="bpmn-properties-field">
                   <span>ラベル</span>
-                  <input
-                    type="text"
+                  <textarea
+                    rows={3}
                     value={selectedElement.label}
                     onChange={(e) => updateElement(selectedElement.id, { label: e.target.value })}
                   />
@@ -963,8 +1015,8 @@ function BpmnEditor() {
                 <div className="bpmn-properties-type">矢印</div>
                 <label className="bpmn-properties-field">
                   <span>ラベル</span>
-                  <input
-                    type="text"
+                  <textarea
+                    rows={2}
                     value={selectedConnection.label}
                     onChange={(e) => updateConnection(selectedConnection.id, { label: e.target.value })}
                   />
@@ -977,8 +1029,8 @@ function BpmnEditor() {
                 <div className="bpmn-properties-type">スイムレーン</div>
                 <label className="bpmn-properties-field">
                   <span>ラベル</span>
-                  <input
-                    type="text"
+                  <textarea
+                    rows={2}
                     value={selectedLane.label}
                     onChange={(e) => updateLane(selectedLane.id, { label: e.target.value })}
                   />
