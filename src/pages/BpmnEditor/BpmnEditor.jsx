@@ -2,7 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import './BpmnEditor.css'
 
-const STORAGE_KEY = 'bpmn-editor-data'
+const LEGACY_STORAGE_KEY = 'bpmn-editor-data'
+const FLOW_TABS = [
+  { key: 'current', label: '現在フロー', storageKey: 'bpmn-editor-data-current' },
+  { key: 'improved', label: '改善後フロー', storageKey: 'bpmn-editor-data-improved' },
+]
 const CANVAS_WIDTH = 1800
 const CANVAS_HEIGHT = 1100
 const DRAG_DATA_TYPE = 'application/bpmn-tool'
@@ -250,9 +254,11 @@ function getConnectionGeometry(conn, from, to) {
   return { points: [p1, p2], mid: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 }, axis: null }
 }
 
-function loadInitialState() {
+function loadInitialState(storageKey) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    // The single-flow editor used to save under one shared key; let the first
+    // ("current") tab adopt that pre-existing data instead of losing it.
+    const raw = localStorage.getItem(storageKey) ?? (storageKey === FLOW_TABS[0].storageKey ? localStorage.getItem(LEGACY_STORAGE_KEY) : null)
     if (!raw) return null
     const parsed = JSON.parse(raw)
     if (!parsed.elements || !parsed.connections) return null
@@ -262,8 +268,8 @@ function loadInitialState() {
   }
 }
 
-function BpmnEditor() {
-  const initial = loadInitialState()
+function FlowEditor({ storageKey, tabs }) {
+  const initial = loadInitialState(storageKey)
   const [elements, setElements] = useState(initial?.elements ?? [])
   const [connections, setConnections] = useState(initial?.connections ?? [])
   const [lanes, setLanes] = useState(initial?.lanes ?? [])
@@ -308,8 +314,8 @@ function BpmnEditor() {
   }
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ elements, connections, lanes, annualCount, issues }))
-  }, [elements, connections, lanes, annualCount, issues])
+    localStorage.setItem(storageKey, JSON.stringify({ elements, connections, lanes, annualCount, issues }))
+  }, [storageKey, elements, connections, lanes, annualCount, issues])
 
   useEffect(() => {
     if (!drag) return undefined
@@ -732,30 +738,30 @@ function BpmnEditor() {
   return (
     <div className="bpmn-editor">
       <header className="bpmn-topbar">
-        <Link to="/" className="bpmn-back">
-          ← ホーム
-        </Link>
-        <NumberField
-          label="年間件数"
-          min={0}
-          value={annualCount}
-          onCommit={setAnnualCount}
-          className="bpmn-annual-count"
-        />
-        <div className="bpmn-actions">
-          <button type="button" onClick={handleExportJson}>
-            JSONエクスポート
-          </button>
-          <label className="bpmn-import-label">
-            JSONインポート
-            <input key={fileInputKey} type="file" accept="application/json" onChange={handleImportJson} />
-          </label>
-          <button type="button" onClick={handleExportSvg}>
-            SVGエクスポート
-          </button>
-          <button type="button" onClick={handleClear}>
-            クリア
-          </button>
+        <div className="bpmn-topbar-left">{tabs}</div>
+        <div className="bpmn-topbar-right">
+          <NumberField
+            label="年間件数"
+            min={0}
+            value={annualCount}
+            onCommit={setAnnualCount}
+            className="bpmn-annual-count"
+          />
+          <div className="bpmn-actions">
+            <button type="button" onClick={handleExportJson}>
+              JSONエクスポート
+            </button>
+            <label className="bpmn-import-label">
+              JSONインポート
+              <input key={fileInputKey} type="file" accept="application/json" onChange={handleImportJson} />
+            </label>
+            <button type="button" onClick={handleExportSvg}>
+              SVGエクスポート
+            </button>
+            <button type="button" onClick={handleClear}>
+              クリア
+            </button>
+          </div>
         </div>
       </header>
 
@@ -1327,6 +1333,33 @@ function BpmnEditor() {
       </div>
     </div>
   )
+}
+
+function BpmnEditor() {
+  const [activeTab, setActiveTab] = useState(FLOW_TABS[0].key)
+  const activeFlow = FLOW_TABS.find((tab) => tab.key === activeTab)
+
+  const tabs = (
+    <>
+      <Link to="/" className="bpmn-back">
+        ← ホーム
+      </Link>
+      <div className="bpmn-tabs">
+        {FLOW_TABS.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            className={`bpmn-tab${tab.key === activeTab ? ' active' : ''}`}
+            onClick={() => setActiveTab(tab.key)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+    </>
+  )
+
+  return <FlowEditor key={activeFlow.key} storageKey={activeFlow.storageKey} tabs={tabs} />
 }
 
 export default BpmnEditor

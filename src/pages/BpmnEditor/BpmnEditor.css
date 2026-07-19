@@ -7,6 +7,7 @@
 .bpmn-topbar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
   padding: 10px 16px;
   background: #1e293b;
@@ -14,12 +15,51 @@
   flex-wrap: wrap;
 }
 
+.bpmn-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.bpmn-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .bpmn-back {
   color: #fff;
   text-decoration: none;
   font-weight: 600;
-  margin-right: 8px;
   white-space: nowrap;
+}
+
+.bpmn-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.bpmn-topbar-left button.bpmn-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 4px;
+  cursor: pointer;
+}
+
+.bpmn-topbar-left button.bpmn-tab:hover {
+  background: none;
+  color: #fff;
+}
+
+.bpmn-topbar-left button.bpmn-tab.active {
+  color: #fff;
+  border-bottom-color: #1971ff;
 }
 
 .bpmn-actions {
