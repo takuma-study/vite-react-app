@@ -385,13 +385,6 @@ function BpmnEditor() {
     setConnections((prev) => [...prev, newConn])
   }
 
-  function handleStraighten() {
-    if (!selection || selection.kind !== 'connection') return
-    setConnections((prev) =>
-      prev.map((c) => (c.id === selection.id ? { ...c, style: 'straight', bendRatio: null } : c)),
-    )
-  }
-
   function toggleConnectMode(style) {
     setConnectSource(null)
     setSelection(null)
@@ -662,6 +655,12 @@ function BpmnEditor() {
       <div className="bpmn-body">
         <aside className="bpmn-sidebar">
           <div className="bpmn-sidebar-section">
+            <h3>レーン</h3>
+            <button type="button" className="bpmn-tool-action" onClick={addLane}>
+              スイムレーンを追加
+            </button>
+          </div>
+          <div className="bpmn-sidebar-section">
             <h3>要素</h3>
             {TOOLS.map((tool) => (
               <div
@@ -689,12 +688,6 @@ function BpmnEditor() {
             </div>
           </div>
           <div className="bpmn-sidebar-section">
-            <h3>レーン</h3>
-            <button type="button" className="bpmn-tool-action" onClick={addLane}>
-              スイムレーンを追加
-            </button>
-          </div>
-          <div className="bpmn-sidebar-section">
             <h3>操作</h3>
             <button
               type="button"
@@ -712,14 +705,6 @@ function BpmnEditor() {
             </button>
             <button type="button" className="bpmn-tool-action" onClick={deleteSelection} disabled={!selection}>
               削除
-            </button>
-            <button
-              type="button"
-              className="bpmn-tool-action"
-              onClick={handleStraighten}
-              disabled={selectedConnection?.style !== 'elbow'}
-            >
-              直線に戻す
             </button>
             <p className="bpmn-sidebar-hint">矢印をドラッグするとカギ線に折り曲げられます</p>
           </div>
