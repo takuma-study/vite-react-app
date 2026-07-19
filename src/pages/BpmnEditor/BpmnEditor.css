@@ -4,7 +4,7 @@
   height: 100vh;
 }
 
-.bpmn-toolbar {
+.bpmn-topbar {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -22,14 +22,13 @@
   white-space: nowrap;
 }
 
-.bpmn-tools,
 .bpmn-actions {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
 }
 
-.bpmn-toolbar button {
+.bpmn-topbar button {
   background: #334155;
   color: #fff;
   border: 1px solid #475569;
@@ -39,18 +38,8 @@
   font-size: 13px;
 }
 
-.bpmn-toolbar button:hover {
+.bpmn-topbar button:hover {
   background: #475569;
-}
-
-.bpmn-toolbar button.active {
-  background: #1971ff;
-  border-color: #1971ff;
-}
-
-.bpmn-toolbar button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 .bpmn-import-label {
@@ -81,6 +70,90 @@
   font-size: 13px;
 }
 
+.bpmn-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.bpmn-sidebar {
+  flex: 0 0 200px;
+  width: 200px;
+  background: #1e293b;
+  color: #fff;
+  padding: 16px 12px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.bpmn-sidebar-section h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.bpmn-tool-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  background: #334155;
+  margin-bottom: 8px;
+  cursor: grab;
+  font-size: 13px;
+  user-select: none;
+}
+
+.bpmn-tool-item:hover {
+  background: #475569;
+}
+
+.bpmn-tool-item:active {
+  cursor: grabbing;
+  opacity: 0.7;
+}
+
+.bpmn-tool-icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  color: #fff;
+}
+
+.bpmn-tool-action {
+  display: block;
+  width: 100%;
+  background: #334155;
+  color: #fff;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.bpmn-tool-action:hover {
+  background: #475569;
+}
+
+.bpmn-tool-action.active {
+  background: #1971ff;
+  border-color: #1971ff;
+}
+
+.bpmn-tool-action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .bpmn-canvas-wrapper {
   position: relative;
   flex: 1;
@@ -92,6 +165,10 @@
 
 .bpmn-canvas {
   display: block;
+}
+
+.bpmn-canvas.drop-hover {
+  background-color: #eef4ff;
 }
 
 .bpmn-element-label,
