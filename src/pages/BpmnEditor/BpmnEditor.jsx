@@ -16,6 +16,7 @@ const LABEL_LINE_HEIGHT = 14
 const ZOOM_MIN = 0.2
 const ZOOM_MAX = 2
 const ZOOM_STEP = 0.1
+const ISSUE_MIN_SIZE = 6
 
 const ELEMENT_DEFAULTS = {
   startEvent: { width: 40, height: 40, label: '開始' },
@@ -152,6 +153,15 @@ function wrapLabelLines(label, maxWidth) {
   return lines
 }
 
+function normalizeRect(x1, y1, x2, y2) {
+  return {
+    x: Math.min(x1, x2),
+    y: Math.min(y1, y2),
+    width: Math.abs(x2 - x1),
+    height: Math.abs(y2 - y1),
+  }
+}
+
 function getBoundaryPoint(el, towardX, towardY) {
   const cx = el.x + el.width / 2
   const cy = el.y + el.height / 2
@@ -258,6 +268,9 @@ function BpmnEditor() {
   const [connections, setConnections] = useState(initial?.connections ?? [])
   const [lanes, setLanes] = useState(initial?.lanes ?? [])
   const [annualCount, setAnnualCount] = useState(initial?.annualCount ?? 0)
+  const [issues, setIssues] = useState(initial?.issues ?? [])
+  const [issueMode, setIssueMode] = useState(false)
+  const [issueDraft, setIssueDraft] = useState(null)
   const [connectMode, setConnectMode] = useState(false)
   const [connectStyle, setConnectStyle] = useState('straight')
   const [connectSource, setConnectSource] = useState(null)
@@ -272,6 +285,7 @@ function BpmnEditor() {
   const svgRef = useRef(null)
   const canvasWrapperRef = useRef(null)
   const suppressClickRef = useRef(false)
+  const issueDraftRef = useRef(null)
 
   function getCanvasPoint(e) {
     const rect = svgRef.current.getBoundingClientRect()
@@ -294,8 +308,8 @@ function BpmnEditor() {
   }
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ elements, connections, lanes, annualCount }))
-  }, [elements, connections, lanes, annualCount])
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ elements, connections, lanes, annualCount, issues }))
+  }, [elements, connections, lanes, annualCount, issues])
 
   useEffect(() => {
     if (!drag) return undefined
@@ -330,6 +344,14 @@ function BpmnEditor() {
         return
       }
 
+      if (drag.kind === 'issue-draw') {
+        if (!moved) return
+        const rect = normalizeRect(drag.startX, drag.startY, x, y)
+        issueDraftRef.current = rect
+        setIssueDraft(rect)
+        return
+      }
+
       setElements((prev) =>
         prev.map((el) =>
           el.id === drag.id ? { ...el, x: x - drag.offsetX, y: y - drag.offsetY } : el,
@@ -337,6 +359,16 @@ function BpmnEditor() {
       )
     }
     function onUp() {
+      if (drag.kind === 'issue-draw') {
+        const rect = issueDraftRef.current
+        if (rect && rect.width >= ISSUE_MIN_SIZE && rect.height >= ISSUE_MIN_SIZE) {
+          const newIssue = { id: nextId('issue'), label: '', ...rect }
+          setIssues((prev) => [...prev, newIssue])
+          setSelection({ kind: 'issue', id: newIssue.id })
+        }
+        issueDraftRef.current = null
+        setIssueDraft(null)
+      }
       // A drag that ends over empty canvas still fires a native click afterward;
       // suppress the next background click so it doesn't clear the selection we just made.
       if (moved) suppressClickRef.current = true
@@ -371,6 +403,8 @@ function BpmnEditor() {
       setConnections((prev) => prev.filter((c) => c.from !== selection.id && c.to !== selection.id))
     } else if (selection.kind === 'lane') {
       setLanes((prev) => prev.filter((l) => l.id !== selection.id))
+    } else if (selection.kind === 'issue') {
+      setIssues((prev) => prev.filter((i) => i.id !== selection.id))
     } else {
       setConnections((prev) => prev.filter((c) => c.id !== selection.id))
     }
@@ -413,10 +447,18 @@ function BpmnEditor() {
   }
 
   function toggleConnectMode(style) {
+    setIssueMode(false)
     setConnectSource(null)
     setSelection(null)
     setConnectMode((prev) => (prev && connectStyle === style ? false : true))
     setConnectStyle(style)
+  }
+
+  function toggleIssueMode() {
+    setConnectMode(false)
+    setConnectSource(null)
+    setSelection(null)
+    setIssueMode((prev) => !prev)
   }
 
   function handleToolDragStart(e, type) {
@@ -453,8 +495,19 @@ function BpmnEditor() {
     setSelection(null)
   }
 
+  function handleCanvasMouseDown(e) {
+    if (!issueMode) return
+    // Elements/connections/lanes already no-op their own mousedown handlers while
+    // issueMode is active, so any mousedown that reaches here (svg background, a
+    // lane rect, or an element/connection that skipped its own handler) should
+    // start a new issue frame, wherever it was drawn from.
+    const { x, y } = getCanvasPoint(e)
+    setSelection(null)
+    setDrag({ kind: 'issue-draw', startX: x, startY: y })
+  }
+
   function handleElementMouseDown(e, el) {
-    if (connectMode) return
+    if (connectMode || issueMode) return
     e.stopPropagation()
     setSelection({ kind: 'element', id: el.id })
     const { x, y } = getCanvasPoint(e)
@@ -485,7 +538,7 @@ function BpmnEditor() {
   }
 
   function handleConnectionMouseDown(e, conn) {
-    if (connectMode) return
+    if (connectMode || issueMode) return
     e.stopPropagation()
     setSelection({ kind: 'connection', id: conn.id })
     const from = elements.find((el) => el.id === conn.from)
@@ -509,7 +562,7 @@ function BpmnEditor() {
   }
 
   function handleLaneClick(e, lane) {
-    if (connectMode) return
+    if (connectMode || issueMode) return
     e.stopPropagation()
     setSelection({ kind: 'lane', id: lane.id })
   }
@@ -522,11 +575,24 @@ function BpmnEditor() {
   }
 
   function handleLaneResizeMouseDown(e, lane) {
-    if (connectMode) return
+    if (connectMode || issueMode) return
     e.stopPropagation()
     setSelection({ kind: 'lane', id: lane.id })
     const { x: startX, y: startY } = getCanvasPoint(e)
     setDrag({ kind: 'lane-resize', id: lane.id, startY, startHeight: lane.height, startX })
+  }
+
+  function handleIssueClick(e, issue) {
+    if (issueMode) return
+    e.stopPropagation()
+    setSelection({ kind: 'issue', id: issue.id })
+  }
+
+  function handleIssueDoubleClick(e, issue) {
+    e.stopPropagation()
+    setEditingId(issue.id)
+    setEditingKind('issue')
+    setEditingValue(issue.label || '')
   }
 
   function updateElement(id, patch) {
@@ -541,6 +607,10 @@ function BpmnEditor() {
     setConnections((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)))
   }
 
+  function updateIssue(id, patch) {
+    setIssues((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)))
+  }
+
   function commitEdit() {
     if (editingKind === 'element') {
       setElements((prev) => prev.map((el) => (el.id === editingId ? { ...el, label: editingValue } : el)))
@@ -548,6 +618,8 @@ function BpmnEditor() {
       setConnections((prev) => prev.map((c) => (c.id === editingId ? { ...c, label: editingValue } : c)))
     } else if (editingKind === 'lane') {
       setLanes((prev) => prev.map((l) => (l.id === editingId ? { ...l, label: editingValue } : l)))
+    } else if (editingKind === 'issue') {
+      setIssues((prev) => prev.map((i) => (i.id === editingId ? { ...i, label: editingValue } : i)))
     }
     setEditingId(null)
     setEditingKind(null)
@@ -559,7 +631,7 @@ function BpmnEditor() {
   }
 
   function handleExportJson() {
-    const data = JSON.stringify({ elements, connections, lanes, annualCount }, null, 2)
+    const data = JSON.stringify({ elements, connections, lanes, annualCount, issues }, null, 2)
     const blob = new Blob([data], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -595,6 +667,7 @@ function BpmnEditor() {
           setConnections(parsed.connections)
           setLanes(parsed.lanes ?? [])
           setAnnualCount(parsed.annualCount ?? 0)
+          setIssues(parsed.issues ?? [])
           setSelection(null)
         } else {
           alert('JSONの形式が不正です')
@@ -608,12 +681,20 @@ function BpmnEditor() {
   }
 
   function handleClear() {
-    if (elements.length === 0 && connections.length === 0 && lanes.length === 0 && annualCount === 0) return
+    if (
+      elements.length === 0 &&
+      connections.length === 0 &&
+      lanes.length === 0 &&
+      annualCount === 0 &&
+      issues.length === 0
+    )
+      return
     if (!window.confirm('全ての要素を削除しますか？')) return
     setElements([])
     setConnections([])
     setLanes([])
     setAnnualCount(0)
+    setIssues([])
     setSelection(null)
   }
 
@@ -633,6 +714,7 @@ function BpmnEditor() {
     selection?.kind === 'connection' ? connections.find((c) => c.id === selection.id) : null
   const selectedElement = selection?.kind === 'element' ? elements.find((el) => el.id === selection.id) : null
   const selectedLane = selection?.kind === 'lane' ? lanes.find((l) => l.id === selection.id) : null
+  const selectedIssue = selection?.kind === 'issue' ? issues.find((i) => i.id === selection.id) : null
 
   let laneOffset = 0
   const laneLayouts = lanes.map((lane) => {
@@ -643,6 +725,9 @@ function BpmnEditor() {
 
   const editingLane = editingKind === 'lane' ? laneLayouts.find((l) => l.id === editingId) : null
   const laneEditPos = editingLane ? { x: LANE_LABEL_WIDTH + 6, y: editingLane.top + 6 } : null
+
+  const editingIssue = editingKind === 'issue' ? issues.find((i) => i.id === editingId) : null
+  const issueEditPos = editingIssue ? { x: editingIssue.x, y: Math.max(0, editingIssue.y - 26) } : null
 
   return (
     <div className="bpmn-editor">
@@ -679,6 +764,7 @@ function BpmnEditor() {
           {connectSource ? '接続先の要素をクリックしてください' : '接続元の要素をクリックしてください'}
         </div>
       )}
+      {issueMode && <div className="bpmn-hint">ドラッグして課題の範囲を赤枠で囲んでください</div>}
 
       <div className="bpmn-body">
         <aside className="bpmn-sidebar">
@@ -731,6 +817,13 @@ function BpmnEditor() {
             >
               カギ線で接続
             </button>
+            <button
+              type="button"
+              className={`bpmn-tool-action${issueMode ? ' active' : ''}`}
+              onClick={toggleIssueMode}
+            >
+              課題を追加
+            </button>
             <button type="button" className="bpmn-tool-action" onClick={deleteSelection} disabled={!selection}>
               削除
             </button>
@@ -753,7 +846,9 @@ function BpmnEditor() {
             className={`bpmn-canvas${dropHover ? ' drop-hover' : ''}`}
             width={CANVAS_WIDTH}
             height={CANVAS_HEIGHT}
+            style={{ cursor: issueMode ? 'crosshair' : undefined }}
             onClick={handleCanvasClick}
+            onMouseDown={handleCanvasMouseDown}
             onDragOver={handleCanvasDragOver}
             onDragLeave={handleCanvasDragLeave}
             onDrop={handleCanvasDrop}
@@ -830,7 +925,7 @@ function BpmnEditor() {
                   <polyline
                     points={points}
                     fill="none"
-                    stroke="transparent"
+                    stroke="rgba(0,0,0,0.01)"
                     strokeWidth={12}
                     onMouseDown={(e) => handleConnectionMouseDown(e, conn)}
                     onDoubleClick={(e) => handleConnectionDoubleClick(e, conn)}
@@ -960,6 +1055,57 @@ function BpmnEditor() {
                 </g>
               )
             })}
+
+            {issues.map((issue) => {
+              const isSelected = selection?.kind === 'issue' && selection.id === issue.id
+              const color = isSelected ? '#be123c' : '#e11d48'
+              return (
+                <g key={issue.id}>
+                  <rect
+                    x={issue.x}
+                    y={issue.y}
+                    width={issue.width}
+                    height={issue.height}
+                    fill="none"
+                    stroke="rgba(0,0,0,0.01)"
+                    strokeWidth={14}
+                    onClick={(e) => handleIssueClick(e, issue)}
+                    onDoubleClick={(e) => handleIssueDoubleClick(e, issue)}
+                    style={{ cursor: issueMode ? 'crosshair' : 'pointer' }}
+                  />
+                  <rect
+                    x={issue.x}
+                    y={issue.y}
+                    width={issue.width}
+                    height={issue.height}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth={isSelected ? 3 : 2.5}
+                    strokeDasharray="6 3"
+                    style={{ pointerEvents: 'none' }}
+                  />
+                  {issue.label && editingId !== issue.id && (
+                    <text x={issue.x} y={issue.y - 8} className="bpmn-issue-label">
+                      {issue.label}
+                    </text>
+                  )}
+                </g>
+              )
+            })}
+
+            {issueDraft && (
+              <rect
+                x={issueDraft.x}
+                y={issueDraft.y}
+                width={issueDraft.width}
+                height={issueDraft.height}
+                fill="rgba(225,29,72,0.08)"
+                stroke="#e11d48"
+                strokeWidth={2}
+                strokeDasharray="6 3"
+                style={{ pointerEvents: 'none' }}
+              />
+            )}
           </svg>
 
           {editingElement && (
@@ -1003,6 +1149,21 @@ function BpmnEditor() {
             <textarea
               className="bpmn-label-input"
               style={{ left: laneEditPos.x, top: laneEditPos.y, width: 120 }}
+              rows={2}
+              autoFocus
+              value={editingValue}
+              onChange={(e) => setEditingValue(e.target.value)}
+              onBlur={commitEdit}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') cancelEdit()
+              }}
+            />
+          )}
+
+          {editingIssue && issueEditPos && (
+            <textarea
+              className="bpmn-label-input"
+              style={{ left: issueEditPos.x, top: issueEditPos.y, width: Math.max(editingIssue.width, 100) }}
               rows={2}
               autoFocus
               value={editingValue}
@@ -1122,6 +1283,42 @@ function BpmnEditor() {
                   min={LANE_MIN_HEIGHT}
                   value={selectedLane.height}
                   onCommit={(height) => updateLane(selectedLane.id, { height })}
+                />
+              </>
+            )}
+
+            {selectedIssue && (
+              <>
+                <div className="bpmn-properties-type bpmn-properties-type-issue">課題</div>
+                <label className="bpmn-properties-field">
+                  <span>内容</span>
+                  <textarea
+                    rows={3}
+                    value={selectedIssue.label}
+                    onChange={(e) => updateIssue(selectedIssue.id, { label: e.target.value })}
+                  />
+                </label>
+                <NumberField
+                  label="幅"
+                  min={ISSUE_MIN_SIZE}
+                  value={selectedIssue.width}
+                  onCommit={(width) => updateIssue(selectedIssue.id, { width })}
+                />
+                <NumberField
+                  label="高さ"
+                  min={ISSUE_MIN_SIZE}
+                  value={selectedIssue.height}
+                  onCommit={(height) => updateIssue(selectedIssue.id, { height })}
+                />
+                <NumberField
+                  label="X座標"
+                  value={Math.round(selectedIssue.x)}
+                  onCommit={(x) => updateIssue(selectedIssue.id, { x })}
+                />
+                <NumberField
+                  label="Y座標"
+                  value={Math.round(selectedIssue.y)}
+                  onCommit={(y) => updateIssue(selectedIssue.id, { y })}
                 />
               </>
             )}
