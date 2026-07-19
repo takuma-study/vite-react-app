@@ -32,6 +32,40 @@ function nextId(prefix) {
   return `${prefix}_${Date.now()}_${idCounter}`
 }
 
+// Number input that only commits on blur/Enter, so retyping a value doesn't
+// resize the shape (and clamp to `min`) after every keystroke.
+function NumberField({ label, value, min, onCommit }) {
+  const [draft, setDraft] = useState(String(value))
+
+  useEffect(() => {
+    setDraft(String(value))
+  }, [value])
+
+  function commit() {
+    let n = Number(draft)
+    if (!Number.isFinite(n)) n = value
+    if (min !== undefined) n = Math.max(min, n)
+    setDraft(String(n))
+    if (n !== value) onCommit(n)
+  }
+
+  return (
+    <label className="bpmn-properties-field">
+      <span>{label}</span>
+      <input
+        type="number"
+        min={min}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.target.blur()
+        }}
+      />
+    </label>
+  )
+}
+
 function ToolIcon({ type }) {
   switch (type) {
     case 'startEvent':
@@ -430,6 +464,18 @@ function BpmnEditor() {
     setDrag({ kind: 'lane-resize', id: lane.id, startY, startHeight: lane.height, startX })
   }
 
+  function updateElement(id, patch) {
+    setElements((prev) => prev.map((el) => (el.id === id ? { ...el, ...patch } : el)))
+  }
+
+  function updateLane(id, patch) {
+    setLanes((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)))
+  }
+
+  function updateConnection(id, patch) {
+    setConnections((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)))
+  }
+
   function commitEdit() {
     if (editingKind === 'element') {
       setElements((prev) => prev.map((el) => (el.id === editingId ? { ...el, label: editingValue } : el)))
@@ -518,6 +564,8 @@ function BpmnEditor() {
 
   const selectedConnection =
     selection?.kind === 'connection' ? connections.find((c) => c.id === selection.id) : null
+  const selectedElement = selection?.kind === 'element' ? elements.find((el) => el.id === selection.id) : null
+  const selectedLane = selection?.kind === 'lane' ? lanes.find((l) => l.id === selection.id) : null
 
   let laneOffset = 0
   const laneLayouts = lanes.map((lane) => {
@@ -856,6 +904,95 @@ function BpmnEditor() {
             />
           )}
         </div>
+
+        {selection && (
+          <aside className="bpmn-properties">
+            <h3>プロパティ</h3>
+
+            {selectedElement && (
+              <>
+                <div className="bpmn-properties-type">
+                  {TOOLS.find((t) => t.type === selectedElement.type)?.label}
+                </div>
+                <label className="bpmn-properties-field">
+                  <span>ラベル</span>
+                  <input
+                    type="text"
+                    value={selectedElement.label}
+                    onChange={(e) => updateElement(selectedElement.id, { label: e.target.value })}
+                  />
+                </label>
+                {selectedElement.type === 'startEvent' || selectedElement.type === 'endEvent' ? (
+                  <NumberField
+                    label="サイズ"
+                    min={10}
+                    value={selectedElement.width}
+                    onCommit={(size) => updateElement(selectedElement.id, { width: size, height: size })}
+                  />
+                ) : (
+                  <>
+                    <NumberField
+                      label="幅"
+                      min={10}
+                      value={selectedElement.width}
+                      onCommit={(width) => updateElement(selectedElement.id, { width })}
+                    />
+                    <NumberField
+                      label="高さ"
+                      min={10}
+                      value={selectedElement.height}
+                      onCommit={(height) => updateElement(selectedElement.id, { height })}
+                    />
+                  </>
+                )}
+                <NumberField
+                  label="X座標"
+                  value={Math.round(selectedElement.x)}
+                  onCommit={(x) => updateElement(selectedElement.id, { x })}
+                />
+                <NumberField
+                  label="Y座標"
+                  value={Math.round(selectedElement.y)}
+                  onCommit={(y) => updateElement(selectedElement.id, { y })}
+                />
+              </>
+            )}
+
+            {selectedConnection && (
+              <>
+                <div className="bpmn-properties-type">矢印</div>
+                <label className="bpmn-properties-field">
+                  <span>ラベル</span>
+                  <input
+                    type="text"
+                    value={selectedConnection.label}
+                    onChange={(e) => updateConnection(selectedConnection.id, { label: e.target.value })}
+                  />
+                </label>
+              </>
+            )}
+
+            {selectedLane && (
+              <>
+                <div className="bpmn-properties-type">スイムレーン</div>
+                <label className="bpmn-properties-field">
+                  <span>ラベル</span>
+                  <input
+                    type="text"
+                    value={selectedLane.label}
+                    onChange={(e) => updateLane(selectedLane.id, { label: e.target.value })}
+                  />
+                </label>
+                <NumberField
+                  label="高さ"
+                  min={LANE_MIN_HEIGHT}
+                  value={selectedLane.height}
+                  onCommit={(height) => updateLane(selectedLane.id, { height })}
+                />
+              </>
+            )}
+          </aside>
+        )}
       </div>
     </div>
   )
