@@ -1,0 +1,113 @@
+.bpmn-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.bpmn-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #1e293b;
+  color: #fff;
+  flex-wrap: wrap;
+}
+
+.bpmn-back {
+  color: #fff;
+  text-decoration: none;
+  font-weight: 600;
+  margin-right: 8px;
+  white-space: nowrap;
+}
+
+.bpmn-tools,
+.bpmn-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bpmn-toolbar button {
+  background: #334155;
+  color: #fff;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.bpmn-toolbar button:hover {
+  background: #475569;
+}
+
+.bpmn-toolbar button.active {
+  background: #1971ff;
+  border-color: #1971ff;
+}
+
+.bpmn-toolbar button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.bpmn-import-label {
+  position: relative;
+  background: #334155;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.bpmn-import-label:hover {
+  background: #475569;
+}
+
+.bpmn-import-label input[type='file'] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.bpmn-hint {
+  background: #fff7cc;
+  color: #664d03;
+  padding: 6px 16px;
+  font-size: 13px;
+}
+
+.bpmn-canvas-wrapper {
+  position: relative;
+  flex: 1;
+  overflow: auto;
+  background-color: #f8fafc;
+  background-image: radial-gradient(circle, #e2e8f0 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.bpmn-canvas {
+  display: block;
+}
+
+.bpmn-element-label,
+.bpmn-flow-label {
+  font-size: 12px;
+  fill: #1e293b;
+  pointer-events: none;
+  user-select: none;
+}
+
+.bpmn-label-input {
+  position: absolute;
+  z-index: 10;
+  font-size: 12px;
+  padding: 2px 4px;
+  border: 1px solid #1971ff;
+  border-radius: 4px;
+  outline: none;
+}
