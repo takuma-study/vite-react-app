@@ -190,9 +190,15 @@
   color: #94a3b8;
 }
 
-.bpmn-canvas-wrapper {
+.bpmn-canvas-area {
   position: relative;
   flex: 1;
+  min-width: 0;
+}
+
+.bpmn-canvas-wrapper {
+  position: absolute;
+  inset: 0;
   overflow: auto;
   background-color: #f8fafc;
   background-image: radial-gradient(circle, #e2e8f0 1px, transparent 1px);
@@ -205,6 +211,64 @@
 
 .bpmn-canvas.drop-hover {
   background-color: #eef4ff;
+}
+
+.bpmn-canvas-scale-spacer {
+  position: relative;
+}
+
+.bpmn-canvas-scale {
+  position: relative;
+  transform-origin: top left;
+}
+
+.bpmn-zoom-controls {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 6px 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  z-index: 5;
+}
+
+.bpmn-zoom-controls button {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #f8fafc;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  color: #1e293b;
+}
+
+.bpmn-zoom-controls button:hover {
+  background: #eef4ff;
+}
+
+.bpmn-zoom-controls button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.bpmn-zoom-controls span {
+  font-size: 12px;
+  color: #475569;
+  min-width: 42px;
+  text-align: center;
+}
+
+.bpmn-zoom-fit {
+  width: auto !important;
+  font-size: 12px !important;
+  padding: 0 10px;
 }
 
 .bpmn-element-label,

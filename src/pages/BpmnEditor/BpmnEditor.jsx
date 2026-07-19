@@ -13,6 +13,9 @@ const LANE_MIN_HEIGHT = 60
 const LANE_LABEL_WIDTH = 28
 const LABEL_FONT = '12px sans-serif'
 const LABEL_LINE_HEIGHT = 14
+const ZOOM_MIN = 0.2
+const ZOOM_MAX = 2
+const ZOOM_STEP = 0.1
 
 const ELEMENT_DEFAULTS = {
   startEvent: { width: 40, height: 40, label: '開始' },
@@ -265,8 +268,30 @@ function BpmnEditor() {
   const [drag, setDrag] = useState(null)
   const [dropHover, setDropHover] = useState(false)
   const [fileInputKey, setFileInputKey] = useState(0)
+  const [zoom, setZoom] = useState(1)
   const svgRef = useRef(null)
+  const canvasWrapperRef = useRef(null)
   const suppressClickRef = useRef(false)
+
+  function getCanvasPoint(e) {
+    const rect = svgRef.current.getBoundingClientRect()
+    return { x: (e.clientX - rect.left) / zoom, y: (e.clientY - rect.top) / zoom }
+  }
+
+  function zoomIn() {
+    setZoom((z) => Math.min(ZOOM_MAX, Math.round((z + ZOOM_STEP) * 100) / 100))
+  }
+
+  function zoomOut() {
+    setZoom((z) => Math.max(ZOOM_MIN, Math.round((z - ZOOM_STEP) * 100) / 100))
+  }
+
+  function zoomToFit() {
+    const wrapper = canvasWrapperRef.current
+    if (!wrapper) return
+    const scale = Math.min(wrapper.clientWidth / CANVAS_WIDTH, wrapper.clientHeight / CANVAS_HEIGHT)
+    setZoom(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(scale * 100) / 100)))
+  }
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ elements, connections, lanes, annualCount }))
@@ -278,8 +303,8 @@ function BpmnEditor() {
 
     function onMove(e) {
       const rect = svgRef.current.getBoundingClientRect()
-      const x = e.clientX - rect.left
-      const y = e.clientY - rect.top
+      const x = (e.clientX - rect.left) / zoom
+      const y = (e.clientY - rect.top) / zoom
       if (!moved && Math.hypot(x - drag.startX, y - drag.startY) >= 3) {
         moved = true
       }
@@ -323,7 +348,7 @@ function BpmnEditor() {
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
     }
-  }, [drag])
+  }, [drag, zoom])
 
   useEffect(() => {
     function onKeyDown(e) {
@@ -415,9 +440,7 @@ function BpmnEditor() {
     setDropHover(false)
     if (!type || !ELEMENT_DEFAULTS[type]) return
     e.preventDefault()
-    const rect = svgRef.current.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
+    const { x, y } = getCanvasPoint(e)
     placeElement(type, x, y)
   }
 
@@ -434,9 +457,7 @@ function BpmnEditor() {
     if (connectMode) return
     e.stopPropagation()
     setSelection({ kind: 'element', id: el.id })
-    const rect = svgRef.current.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
+    const { x, y } = getCanvasPoint(e)
     setDrag({ kind: 'element', id: el.id, offsetX: x - el.x, offsetY: y - el.y, startX: x, startY: y })
   }
 
@@ -471,9 +492,7 @@ function BpmnEditor() {
     const to = elements.find((el) => el.id === conn.to)
     if (!from || !to) return
     const { axis, fromPoint, toPoint } = getElbowLayout(from, to)
-    const rect = svgRef.current.getBoundingClientRect()
-    const startX = e.clientX - rect.left
-    const startY = e.clientY - rect.top
+    const { x: startX, y: startY } = getCanvasPoint(e)
     setDrag({ kind: 'elbow', id: conn.id, axis, from: fromPoint, to: toPoint, startX, startY })
   }
 
@@ -506,9 +525,7 @@ function BpmnEditor() {
     if (connectMode) return
     e.stopPropagation()
     setSelection({ kind: 'lane', id: lane.id })
-    const rect = svgRef.current.getBoundingClientRect()
-    const startX = e.clientX - rect.left
-    const startY = e.clientY - rect.top
+    const { x: startX, y: startY } = getCanvasPoint(e)
     setDrag({ kind: 'lane-resize', id: lane.id, startY, startHeight: lane.height, startX })
   }
 
@@ -721,7 +738,16 @@ function BpmnEditor() {
           </div>
         </aside>
 
-        <div className="bpmn-canvas-wrapper">
+        <div className="bpmn-canvas-area">
+        <div className="bpmn-canvas-wrapper" ref={canvasWrapperRef}>
+          <div
+            className="bpmn-canvas-scale-spacer"
+            style={{ width: CANVAS_WIDTH * zoom, height: CANVAS_HEIGHT * zoom }}
+          >
+            <div
+              className="bpmn-canvas-scale"
+              style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT, transform: `scale(${zoom})` }}
+            >
           <svg
             ref={svgRef}
             className={`bpmn-canvas${dropHover ? ' drop-hover' : ''}`}
@@ -987,6 +1013,22 @@ function BpmnEditor() {
               }}
             />
           )}
+            </div>
+          </div>
+        </div>
+
+          <div className="bpmn-zoom-controls">
+            <button type="button" onClick={zoomOut} disabled={zoom <= ZOOM_MIN}>
+              −
+            </button>
+            <span>{Math.round(zoom * 100)}%</span>
+            <button type="button" onClick={zoomIn} disabled={zoom >= ZOOM_MAX}>
+              ＋
+            </button>
+            <button type="button" className="bpmn-zoom-fit" onClick={zoomToFit}>
+              全体表示
+            </button>
+          </div>
         </div>
 
         {selection && (
