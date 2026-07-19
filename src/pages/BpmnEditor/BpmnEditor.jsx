@@ -19,6 +19,7 @@ const ELEMENT_DEFAULTS = {
   endEvent: { width: 40, height: 40, label: '終了' },
   task: { width: 120, height: 60, label: 'タスク' },
   gateway: { width: 50, height: 50, label: '' },
+  note: { width: 140, height: 80, label: 'メモ' },
 }
 
 const TOOLS = [
@@ -27,6 +28,8 @@ const TOOLS = [
   { type: 'task', label: 'タスク' },
   { type: 'gateway', label: 'ゲートウェイ' },
 ]
+
+const NOTE_TOOL = { type: 'note', label: 'テキストボックス' }
 
 let idCounter = 0
 function nextId(prefix) {
@@ -92,6 +95,15 @@ function ToolIcon({ type }) {
       return (
         <svg className="bpmn-tool-icon" viewBox="0 0 24 24">
           <polygon points="12,2 22,12 12,22 2,12" fill="none" stroke="currentColor" strokeWidth="1.5" />
+        </svg>
+      )
+    case 'note':
+      return (
+        <svg className="bpmn-tool-icon" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          <line x1="6.5" y1="9" x2="17.5" y2="9" stroke="currentColor" strokeWidth="1.5" />
+          <line x1="6.5" y1="13" x2="17.5" y2="13" stroke="currentColor" strokeWidth="1.5" />
+          <line x1="6.5" y1="17" x2="13" y2="17" stroke="currentColor" strokeWidth="1.5" />
         </svg>
       )
     default:
@@ -436,6 +448,7 @@ function BpmnEditor() {
   function handleElementClick(e, el) {
     e.stopPropagation()
     if (connectMode) {
+      if (el.type === 'note') return
       if (!connectSource) {
         setConnectSource(el.id)
       } else if (connectSource !== el.id) {
@@ -664,6 +677,18 @@ function BpmnEditor() {
             ))}
           </div>
           <div className="bpmn-sidebar-section">
+            <h3>メモ</h3>
+            <div
+              className="bpmn-tool-item"
+              draggable
+              onDragStart={(e) => handleToolDragStart(e, NOTE_TOOL.type)}
+              title="ドラッグしてキャンバスに配置"
+            >
+              <ToolIcon type={NOTE_TOOL.type} />
+              <span>{NOTE_TOOL.label}</span>
+            </div>
+          </div>
+          <div className="bpmn-sidebar-section">
             <h3>レーン</h3>
             <button type="button" className="bpmn-tool-action" onClick={addLane}>
               スイムレーンを追加
@@ -748,8 +773,8 @@ function BpmnEditor() {
                       x={LANE_LABEL_WIDTH / 2}
                       y={lane.top + lane.height / 2}
                       textAnchor="middle"
-                      dominantBaseline="middle"
-                      transform={`rotate(-90 ${LANE_LABEL_WIDTH / 2} ${lane.top + lane.height / 2})`}
+                      dominantBaseline="central"
+                      style={{ writingMode: 'vertical-rl' }}
                       className="bpmn-lane-label"
                       onClick={(e) => handleLaneClick(e, lane)}
                       onDoubleClick={(e) => handleLaneDoubleClick(e, lane)}
@@ -880,13 +905,24 @@ function BpmnEditor() {
                       strokeWidth={isSelected || isConnectSource ? 2.5 : 1.5}
                     />
                   )}
+                  {el.type === 'note' && (
+                    <rect
+                      x={el.x}
+                      y={el.y}
+                      width={el.width}
+                      height={el.height}
+                      fill="#fffde7"
+                      stroke={isSelected || isConnectSource ? '#1971ff' : '#e0c14f'}
+                      strokeWidth={isSelected || isConnectSource ? 2.5 : 1.5}
+                    />
+                  )}
                   {el.label &&
                     editingId !== el.id &&
                     (() => {
-                      const isTask = el.type === 'task'
-                      const lines = isTask ? wrapLabelLines(el.label, el.width - 16) : el.label.split('\n')
-                      const baseline = isTask ? 'middle' : 'auto'
-                      const startY = isTask
+                      const isBox = el.type === 'task' || el.type === 'note'
+                      const lines = isBox ? wrapLabelLines(el.label, el.width - 16) : el.label.split('\n')
+                      const baseline = isBox ? 'middle' : 'auto'
+                      const startY = isBox
                         ? cy - ((lines.length - 1) * LABEL_LINE_HEIGHT) / 2
                         : el.y + el.height + 14
                       return (
@@ -964,7 +1000,7 @@ function BpmnEditor() {
             {selectedElement && (
               <>
                 <div className="bpmn-properties-type">
-                  {TOOLS.find((t) => t.type === selectedElement.type)?.label}
+                  {[...TOOLS, NOTE_TOOL].find((t) => t.type === selectedElement.type)?.label}
                 </div>
                 <label className="bpmn-properties-field">
                   <span>ラベル</span>
