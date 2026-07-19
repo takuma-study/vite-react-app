@@ -165,6 +165,7 @@ function BpmnEditor() {
   const [elements, setElements] = useState(initial?.elements ?? [])
   const [connections, setConnections] = useState(initial?.connections ?? [])
   const [connectMode, setConnectMode] = useState(false)
+  const [connectStyle, setConnectStyle] = useState('straight')
   const [connectSource, setConnectSource] = useState(null)
   const [selection, setSelection] = useState(null)
   const [editingId, setEditingId] = useState(null)
@@ -269,7 +270,14 @@ function BpmnEditor() {
   function createConnection(fromId, toId) {
     const exists = connections.some((c) => c.from === fromId && c.to === toId)
     if (exists || fromId === toId) return
-    const newConn = { id: nextId('flow'), from: fromId, to: toId, label: '', style: 'straight', bendRatio: null }
+    const newConn = {
+      id: nextId('flow'),
+      from: fromId,
+      to: toId,
+      label: '',
+      style: connectStyle,
+      bendRatio: connectStyle === 'elbow' ? 0.5 : null,
+    }
     setConnections((prev) => [...prev, newConn])
   }
 
@@ -280,10 +288,11 @@ function BpmnEditor() {
     )
   }
 
-  function toggleConnectMode() {
+  function toggleConnectMode(style) {
     setConnectSource(null)
     setSelection(null)
-    setConnectMode((prev) => !prev)
+    setConnectMode((prev) => (prev && connectStyle === style ? false : true))
+    setConnectStyle(style)
   }
 
   function handleToolDragStart(e, type) {
@@ -515,10 +524,17 @@ function BpmnEditor() {
             <h3>操作</h3>
             <button
               type="button"
-              className={`bpmn-tool-action${connectMode ? ' active' : ''}`}
-              onClick={toggleConnectMode}
+              className={`bpmn-tool-action${connectMode && connectStyle === 'straight' ? ' active' : ''}`}
+              onClick={() => toggleConnectMode('straight')}
             >
-              矢印で接続
+              直線で接続
+            </button>
+            <button
+              type="button"
+              className={`bpmn-tool-action${connectMode && connectStyle === 'elbow' ? ' active' : ''}`}
+              onClick={() => toggleConnectMode('elbow')}
+            >
+              カギ線で接続
             </button>
             <button type="button" className="bpmn-tool-action" onClick={deleteSelection} disabled={!selection}>
               削除
