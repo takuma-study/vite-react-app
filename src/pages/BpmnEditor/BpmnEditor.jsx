@@ -8,6 +8,9 @@ const CANVAS_HEIGHT = 1100
 const DRAG_DATA_TYPE = 'application/bpmn-tool'
 const RATIO_MIN = 0.05
 const RATIO_MAX = 0.95
+const LANE_DEFAULT_HEIGHT = 200
+const LANE_MIN_HEIGHT = 60
+const LANE_LABEL_WIDTH = 28
 
 const ELEMENT_DEFAULTS = {
   startEvent: { width: 40, height: 40, label: '開始' },
@@ -164,6 +167,7 @@ function BpmnEditor() {
   const initial = loadInitialState()
   const [elements, setElements] = useState(initial?.elements ?? [])
   const [connections, setConnections] = useState(initial?.connections ?? [])
+  const [lanes, setLanes] = useState(initial?.lanes ?? [])
   const [connectMode, setConnectMode] = useState(false)
   const [connectStyle, setConnectStyle] = useState('straight')
   const [connectSource, setConnectSource] = useState(null)
@@ -178,8 +182,8 @@ function BpmnEditor() {
   const suppressClickRef = useRef(false)
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ elements, connections }))
-  }, [elements, connections])
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ elements, connections, lanes }))
+  }, [elements, connections, lanes])
 
   useEffect(() => {
     if (!drag) return undefined
@@ -204,6 +208,13 @@ function BpmnEditor() {
         setConnections((prev) =>
           prev.map((c) => (c.id === drag.id ? { ...c, style: 'elbow', bendRatio: ratio } : c)),
         )
+        return
+      }
+
+      if (drag.kind === 'lane-resize') {
+        if (!moved) return
+        const height = Math.max(LANE_MIN_HEIGHT, drag.startHeight + (y - drag.startY))
+        setLanes((prev) => prev.map((l) => (l.id === drag.id ? { ...l, height } : l)))
         return
       }
 
@@ -246,10 +257,17 @@ function BpmnEditor() {
     if (selection.kind === 'element') {
       setElements((prev) => prev.filter((el) => el.id !== selection.id))
       setConnections((prev) => prev.filter((c) => c.from !== selection.id && c.to !== selection.id))
+    } else if (selection.kind === 'lane') {
+      setLanes((prev) => prev.filter((l) => l.id !== selection.id))
     } else {
       setConnections((prev) => prev.filter((c) => c.id !== selection.id))
     }
     setSelection(null)
+  }
+
+  function addLane() {
+    const newLane = { id: nextId('lane'), label: `レーン${lanes.length + 1}`, height: LANE_DEFAULT_HEIGHT }
+    setLanes((prev) => [...prev, newLane])
   }
 
   function placeElement(type, x, y) {
@@ -389,11 +407,36 @@ function BpmnEditor() {
     setConnections((prev) => prev.map((c) => (c.id === connId ? { ...c, style: 'straight', bendRatio: null } : c)))
   }
 
+  function handleLaneClick(e, lane) {
+    if (connectMode) return
+    e.stopPropagation()
+    setSelection({ kind: 'lane', id: lane.id })
+  }
+
+  function handleLaneDoubleClick(e, lane) {
+    e.stopPropagation()
+    setEditingId(lane.id)
+    setEditingKind('lane')
+    setEditingValue(lane.label)
+  }
+
+  function handleLaneResizeMouseDown(e, lane) {
+    if (connectMode) return
+    e.stopPropagation()
+    setSelection({ kind: 'lane', id: lane.id })
+    const rect = svgRef.current.getBoundingClientRect()
+    const startX = e.clientX - rect.left
+    const startY = e.clientY - rect.top
+    setDrag({ kind: 'lane-resize', id: lane.id, startY, startHeight: lane.height, startX })
+  }
+
   function commitEdit() {
     if (editingKind === 'element') {
       setElements((prev) => prev.map((el) => (el.id === editingId ? { ...el, label: editingValue } : el)))
     } else if (editingKind === 'connection') {
       setConnections((prev) => prev.map((c) => (c.id === editingId ? { ...c, label: editingValue } : c)))
+    } else if (editingKind === 'lane') {
+      setLanes((prev) => prev.map((l) => (l.id === editingId ? { ...l, label: editingValue } : l)))
     }
     setEditingId(null)
     setEditingKind(null)
@@ -405,7 +448,7 @@ function BpmnEditor() {
   }
 
   function handleExportJson() {
-    const data = JSON.stringify({ elements, connections }, null, 2)
+    const data = JSON.stringify({ elements, connections, lanes }, null, 2)
     const blob = new Blob([data], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -439,6 +482,7 @@ function BpmnEditor() {
         if (parsed.elements && parsed.connections) {
           setElements(parsed.elements)
           setConnections(parsed.connections)
+          setLanes(parsed.lanes ?? [])
           setSelection(null)
         } else {
           alert('JSONの形式が不正です')
@@ -452,10 +496,11 @@ function BpmnEditor() {
   }
 
   function handleClear() {
-    if (elements.length === 0 && connections.length === 0) return
+    if (elements.length === 0 && connections.length === 0 && lanes.length === 0) return
     if (!window.confirm('全ての要素を削除しますか？')) return
     setElements([])
     setConnections([])
+    setLanes([])
     setSelection(null)
   }
 
@@ -473,6 +518,16 @@ function BpmnEditor() {
 
   const selectedConnection =
     selection?.kind === 'connection' ? connections.find((c) => c.id === selection.id) : null
+
+  let laneOffset = 0
+  const laneLayouts = lanes.map((lane) => {
+    const top = laneOffset
+    laneOffset += lane.height
+    return { ...lane, top }
+  })
+
+  const editingLane = editingKind === 'lane' ? laneLayouts.find((l) => l.id === editingId) : null
+  const laneEditPos = editingLane ? { x: LANE_LABEL_WIDTH + 6, y: editingLane.top + 6 } : null
 
   return (
     <div className="bpmn-editor">
@@ -521,6 +576,12 @@ function BpmnEditor() {
             ))}
           </div>
           <div className="bpmn-sidebar-section">
+            <h3>レーン</h3>
+            <button type="button" className="bpmn-tool-action" onClick={addLane}>
+              スイムレーンを追加
+            </button>
+          </div>
+          <div className="bpmn-sidebar-section">
             <h3>操作</h3>
             <button
               type="button"
@@ -567,6 +628,59 @@ function BpmnEditor() {
                 <path d="M0,0 L0,6 L9,3 z" fill="#333" />
               </marker>
             </defs>
+
+            {laneLayouts.map((lane, idx) => {
+              const isSelected = selection?.kind === 'lane' && selection.id === lane.id
+              return (
+                <g key={lane.id}>
+                  <rect
+                    x={0}
+                    y={lane.top}
+                    width={CANVAS_WIDTH}
+                    height={lane.height}
+                    fill={idx % 2 === 0 ? '#ffffff' : '#fafbfc'}
+                    stroke={isSelected ? '#1971ff' : '#999'}
+                    strokeWidth={isSelected ? 2.5 : 1}
+                    onClick={(e) => handleLaneClick(e, lane)}
+                    style={{ cursor: connectMode ? 'default' : 'pointer' }}
+                  />
+                  <rect
+                    x={0}
+                    y={lane.top}
+                    width={LANE_LABEL_WIDTH}
+                    height={lane.height}
+                    fill="#eef1f5"
+                    stroke={isSelected ? '#1971ff' : '#999'}
+                    strokeWidth={isSelected ? 2.5 : 1}
+                    onClick={(e) => handleLaneClick(e, lane)}
+                    style={{ cursor: connectMode ? 'default' : 'pointer' }}
+                  />
+                  {editingId !== lane.id && (
+                    <text
+                      x={LANE_LABEL_WIDTH / 2}
+                      y={lane.top + lane.height / 2}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      transform={`rotate(-90 ${LANE_LABEL_WIDTH / 2} ${lane.top + lane.height / 2})`}
+                      className="bpmn-lane-label"
+                      onClick={(e) => handleLaneClick(e, lane)}
+                      onDoubleClick={(e) => handleLaneDoubleClick(e, lane)}
+                    >
+                      {lane.label}
+                    </text>
+                  )}
+                  <rect
+                    x={0}
+                    y={lane.top + lane.height - 4}
+                    width={CANVAS_WIDTH}
+                    height={8}
+                    fill="transparent"
+                    onMouseDown={(e) => handleLaneResizeMouseDown(e, lane)}
+                    style={{ cursor: 'ns-resize' }}
+                  />
+                </g>
+              )
+            })}
 
             {connections.map((conn) => {
               const from = elements.find((el) => el.id === conn.from)
@@ -716,6 +830,21 @@ function BpmnEditor() {
             <input
               className="bpmn-label-input"
               style={{ left: connectionEditPos.x, top: connectionEditPos.y, width: 80 }}
+              autoFocus
+              value={editingValue}
+              onChange={(e) => setEditingValue(e.target.value)}
+              onBlur={commitEdit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitEdit()
+                if (e.key === 'Escape') cancelEdit()
+              }}
+            />
+          )}
+
+          {editingLane && laneEditPos && (
+            <input
+              className="bpmn-label-input"
+              style={{ left: laneEditPos.x, top: laneEditPos.y, width: 120 }}
               autoFocus
               value={editingValue}
               onChange={(e) => setEditingValue(e.target.value)}

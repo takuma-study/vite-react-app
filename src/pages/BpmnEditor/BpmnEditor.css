@@ -186,6 +186,14 @@
   user-select: none;
 }
 
+.bpmn-lane-label {
+  font-size: 12px;
+  font-weight: 600;
+  fill: #475569;
+  user-select: none;
+  cursor: pointer;
+}
+
 .bpmn-label-input {
   position: absolute;
   z-index: 10;
