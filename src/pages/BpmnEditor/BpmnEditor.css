@@ -403,6 +403,94 @@
   border-color: #1971ff;
 }
 
+.bpmn-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.bpmn-modal {
+  width: 560px;
+  max-width: 90vw;
+  max-height: 85vh;
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+}
+
+.bpmn-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bpmn-modal-header h2 {
+  margin: 0;
+  font-size: 16px;
+  color: #1e293b;
+}
+
+.bpmn-modal-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  line-height: 1;
+  color: #64748b;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.bpmn-modal-close:hover {
+  color: #1e293b;
+}
+
+.bpmn-modal-steps {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #334155;
+}
+
+.bpmn-modal-copy {
+  align-self: flex-start;
+  background: #1971ff;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bpmn-modal-copy:hover {
+  background: #1558cc;
+}
+
+.bpmn-modal-preview {
+  flex: 1;
+  min-height: 200px;
+  resize: vertical;
+  box-sizing: border-box;
+  padding: 10px;
+  font-size: 12px;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  line-height: 1.5;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  color: #334155;
+  background: #f8fafc;
+}
+
 .bpmn-label-input {
   position: absolute;
   z-index: 10;

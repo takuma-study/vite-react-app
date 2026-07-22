@@ -288,6 +288,8 @@ function FlowEditor({ storageKey, tabs }) {
   const [dropHover, setDropHover] = useState(false)
   const [fileInputKey, setFileInputKey] = useState(0)
   const [zoom, setZoom] = useState(1)
+  const [aiModalOpen, setAiModalOpen] = useState(false)
+  const [aiCopyDone, setAiCopyDone] = useState(false)
   const svgRef = useRef(null)
   const canvasWrapperRef = useRef(null)
   const suppressClickRef = useRef(false)
@@ -636,6 +638,44 @@ function FlowEditor({ storageKey, tabs }) {
     setEditingKind(null)
   }
 
+  function buildAiPrompt() {
+    const data = JSON.stringify({ elements, connections, lanes, annualCount, issues }, null, 2)
+    return `あなたは業務フロー改善のコンサルタントです。以下はBPMN風フロー図エディタで作成した業務フローのJSONデータです。
+
+このフローを分析し、非効率な点・ボトルネック・無駄・リスクなど「課題」だと思われる箇所を見つけてください。
+見つけた課題は、既存のJSONの "issues" 配列に要素を追加する形で表現してください。issues の各要素は以下の形式です。
+
+{ "id": "一意な文字列", "label": "課題の説明文", "x": 数値, "y": 数値, "width": 数値, "height": 数値 }
+
+x, y, width, height は、課題があると判断した elements（タスクなど）を赤枠で囲む座標・サイズにしてください（該当する要素の x, y, width, height を参考に、少し余白を持たせた範囲を指定してください）。
+
+【重要な制約】
+- elements, connections, lanes, annualCount は変更せず、そのまま出力してください。
+- issues 配列にのみ、見つけた課題を追加してください（既存の issues も保持してください）。
+- 出力は説明文などを含めず、上記形式の完全なJSONオブジェクトのみにしてください（コードブロックの \`\`\`json などの記号も不要です）。
+
+【フローのJSONデータ】
+${data}`
+  }
+
+  async function handleCopyAiPrompt() {
+    const text = buildAiPrompt()
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+    }
+    setAiCopyDone(true)
+    setTimeout(() => setAiCopyDone(false), 2000)
+  }
+
   function handleExportJson() {
     const data = JSON.stringify({ elements, connections, lanes, annualCount, issues }, null, 2)
     const blob = new Blob([data], { type: 'application/json' })
@@ -748,6 +788,9 @@ function FlowEditor({ storageKey, tabs }) {
             className="bpmn-annual-count"
           />
           <div className="bpmn-actions">
+            <button type="button" onClick={() => setAiModalOpen(true)}>
+              AIに課題付与を依頼
+            </button>
             <button type="button" onClick={handleExportJson}>
               JSONエクスポート
             </button>
@@ -1331,6 +1374,28 @@ function FlowEditor({ storageKey, tabs }) {
           </aside>
         )}
       </div>
+
+      {aiModalOpen && (
+        <div className="bpmn-modal-overlay" onClick={() => setAiModalOpen(false)}>
+          <div className="bpmn-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="bpmn-modal-header">
+              <h2>AIに課題付与を依頼</h2>
+              <button type="button" className="bpmn-modal-close" onClick={() => setAiModalOpen(false)}>
+                ×
+              </button>
+            </div>
+            <ol className="bpmn-modal-steps">
+              <li>下のボタンでテキストをコピーします。</li>
+              <li>ChatGPTなどのAIチャットに貼り付けて送信します。</li>
+              <li>返ってきたJSONを保存し、「JSONインポート」から読み込むと課題付与済みのフローが反映されます。</li>
+            </ol>
+            <button type="button" className="bpmn-modal-copy" onClick={handleCopyAiPrompt}>
+              {aiCopyDone ? 'コピーしました！' : 'テキストをコピー'}
+            </button>
+            <textarea className="bpmn-modal-preview" readOnly value={buildAiPrompt()} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
