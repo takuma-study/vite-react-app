@@ -294,6 +294,8 @@ function FlowEditor({ storageKey, tabs }) {
   const [zoom, setZoom] = useState(1)
   const [aiModalOpen, setAiModalOpen] = useState(false)
   const [aiCopyDone, setAiCopyDone] = useState(false)
+  const [improvementAiModalOpen, setImprovementAiModalOpen] = useState(false)
+  const [improvementAiCopyDone, setImprovementAiCopyDone] = useState(false)
   const svgRef = useRef(null)
   const canvasWrapperRef = useRef(null)
   const suppressClickRef = useRef(false)
@@ -733,7 +735,7 @@ function FlowEditor({ storageKey, tabs }) {
   }
 
   function buildAiPrompt() {
-    const data = JSON.stringify({ elements, connections, lanes, annualCount, issues }, null, 2)
+    const data = JSON.stringify({ elements, connections, lanes, annualCount, issues, improvements }, null, 2)
     return `あなたは業務フロー改善のコンサルタントです。以下はBPMN風フロー図エディタで作成した業務フローのJSONデータです。
 
 このフローを分析し、非効率な点・ボトルネック・無駄・リスクなど「課題」だと思われる箇所を見つけてください。
@@ -768,6 +770,47 @@ ${data}`
     }
     setAiCopyDone(true)
     setTimeout(() => setAiCopyDone(false), 2000)
+  }
+
+  function buildImprovementAiPrompt() {
+    const data = JSON.stringify({ elements, connections, lanes, annualCount, issues, improvements }, null, 2)
+    return `あなたは業務フロー改善のコンサルタントです。以下はBPMN風フロー図エディタで作成した現在の業務フローのJSONデータです（issues に課題が付与されている場合があります）。
+
+このフローの課題を踏まえて、改善後の業務フロー全体を新たに設計してください。改善後のフローは elements, connections, lanes, annualCount を使って表現してください。現在のフローの構成を参考にしつつ、業務改善のために要素の追加・削除・変更・接続の変更を自由に行ってください。
+
+さらに、改善した箇所（追加・変更した要素や、まとめて自動化した箇所など）には improvements 配列で青枠を付けて説明してください。improvements の各要素は以下の形式です。
+
+{ "id": "一意な文字列", "label": "改善内容の説明文", "x": 数値, "y": 数値, "width": 数値, "height": 数値 }
+
+x, y, width, height は、改善した elements を青枠で囲む座標・サイズにしてください（該当する要素の x, y, width, height を参考に、少し余白を持たせた範囲を指定してください）。
+
+【重要な制約】
+- 出力は elements, connections, lanes, annualCount, issues, improvements をすべて含む完全なJSONオブジェクトにしてください。
+- issues は空配列 [] にしてください（改善後フローには課題は不要です）。
+- elements の x, y 座標は、幅1800×高さ1100程度のキャンバス内に収まるように配置してください。
+- 出力は説明文などを含めず、上記形式の完全なJSONオブジェクトのみにしてください（コードブロックの \`\`\`json などの記号も不要です）。
+- このJSONは「改善後フロー」タブの「JSONインポート」からそのまま読み込んで使用します。
+
+【現在のフローのJSONデータ】
+${data}`
+  }
+
+  async function handleCopyImprovementAiPrompt() {
+    const text = buildImprovementAiPrompt()
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+    }
+    setImprovementAiCopyDone(true)
+    setTimeout(() => setImprovementAiCopyDone(false), 2000)
   }
 
   function handleExportJson() {
@@ -895,6 +938,9 @@ ${data}`
           <div className="bpmn-actions">
             <button type="button" onClick={() => setAiModalOpen(true)}>
               AIに課題付与を依頼
+            </button>
+            <button type="button" onClick={() => setImprovementAiModalOpen(true)}>
+              AIに改善後フローの作成を依頼
             </button>
             <button type="button" onClick={handleExportJson}>
               JSONエクスポート
@@ -1616,6 +1662,34 @@ ${data}`
               {aiCopyDone ? 'コピーしました！' : 'テキストをコピー'}
             </button>
             <textarea className="bpmn-modal-preview" readOnly value={buildAiPrompt()} />
+          </div>
+        </div>
+      )}
+
+      {improvementAiModalOpen && (
+        <div className="bpmn-modal-overlay" onClick={() => setImprovementAiModalOpen(false)}>
+          <div className="bpmn-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="bpmn-modal-header">
+              <h2>AIに改善後フローの作成を依頼</h2>
+              <button
+                type="button"
+                className="bpmn-modal-close"
+                onClick={() => setImprovementAiModalOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <ol className="bpmn-modal-steps">
+              <li>下のボタンでテキストをコピーします。</li>
+              <li>ChatGPTなどのAIチャットに貼り付けて送信します。</li>
+              <li>
+                返ってきたJSONを保存し、「改善後フロー」タブに切り替えて「JSONインポート」から読み込むと、改善後フローと改善箇所を示す青枠が反映されます。
+              </li>
+            </ol>
+            <button type="button" className="bpmn-modal-copy" onClick={handleCopyImprovementAiPrompt}>
+              {improvementAiCopyDone ? 'コピーしました！' : 'テキストをコピー'}
+            </button>
+            <textarea className="bpmn-modal-preview" readOnly value={buildImprovementAiPrompt()} />
           </div>
         </div>
       )}
