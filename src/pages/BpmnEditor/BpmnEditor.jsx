@@ -21,6 +21,7 @@ const ZOOM_MIN = 0.2
 const ZOOM_MAX = 2
 const ZOOM_STEP = 0.1
 const ISSUE_MIN_SIZE = 6
+const IMPROVEMENT_MIN_SIZE = 6
 
 const ELEMENT_DEFAULTS = {
   startEvent: { width: 40, height: 40, label: '開始' },
@@ -277,6 +278,9 @@ function FlowEditor({ storageKey, tabs }) {
   const [issues, setIssues] = useState(initial?.issues ?? [])
   const [issueMode, setIssueMode] = useState(false)
   const [issueDraft, setIssueDraft] = useState(null)
+  const [improvements, setImprovements] = useState(initial?.improvements ?? [])
+  const [improvementMode, setImprovementMode] = useState(false)
+  const [improvementDraft, setImprovementDraft] = useState(null)
   const [connectMode, setConnectMode] = useState(false)
   const [connectStyle, setConnectStyle] = useState('straight')
   const [connectSource, setConnectSource] = useState(null)
@@ -294,6 +298,7 @@ function FlowEditor({ storageKey, tabs }) {
   const canvasWrapperRef = useRef(null)
   const suppressClickRef = useRef(false)
   const issueDraftRef = useRef(null)
+  const improvementDraftRef = useRef(null)
 
   function getCanvasPoint(e) {
     const rect = svgRef.current.getBoundingClientRect()
@@ -316,8 +321,11 @@ function FlowEditor({ storageKey, tabs }) {
   }
 
   useEffect(() => {
-    localStorage.setItem(storageKey, JSON.stringify({ elements, connections, lanes, annualCount, issues }))
-  }, [storageKey, elements, connections, lanes, annualCount, issues])
+    localStorage.setItem(
+      storageKey,
+      JSON.stringify({ elements, connections, lanes, annualCount, issues, improvements }),
+    )
+  }, [storageKey, elements, connections, lanes, annualCount, issues, improvements])
 
   useEffect(() => {
     if (!drag) return undefined
@@ -367,6 +375,21 @@ function FlowEditor({ storageKey, tabs }) {
         return
       }
 
+      if (drag.kind === 'improvement-draw') {
+        if (!moved) return
+        const rect = normalizeRect(drag.startX, drag.startY, x, y)
+        improvementDraftRef.current = rect
+        setImprovementDraft(rect)
+        return
+      }
+
+      if (drag.kind === 'improvement-move') {
+        setImprovements((prev) =>
+          prev.map((i) => (i.id === drag.id ? { ...i, x: x - drag.offsetX, y: y - drag.offsetY } : i)),
+        )
+        return
+      }
+
       setElements((prev) =>
         prev.map((el) =>
           el.id === drag.id ? { ...el, x: x - drag.offsetX, y: y - drag.offsetY } : el,
@@ -383,6 +406,16 @@ function FlowEditor({ storageKey, tabs }) {
         }
         issueDraftRef.current = null
         setIssueDraft(null)
+      }
+      if (drag.kind === 'improvement-draw') {
+        const rect = improvementDraftRef.current
+        if (rect && rect.width >= IMPROVEMENT_MIN_SIZE && rect.height >= IMPROVEMENT_MIN_SIZE) {
+          const newImprovement = { id: nextId('improvement'), label: '', ...rect }
+          setImprovements((prev) => [...prev, newImprovement])
+          setSelection({ kind: 'improvement', id: newImprovement.id })
+        }
+        improvementDraftRef.current = null
+        setImprovementDraft(null)
       }
       // A drag that ends over empty canvas still fires a native click afterward;
       // suppress the next background click so it doesn't clear the selection we just made.
@@ -420,6 +453,8 @@ function FlowEditor({ storageKey, tabs }) {
       setLanes((prev) => prev.filter((l) => l.id !== selection.id))
     } else if (selection.kind === 'issue') {
       setIssues((prev) => prev.filter((i) => i.id !== selection.id))
+    } else if (selection.kind === 'improvement') {
+      setImprovements((prev) => prev.filter((i) => i.id !== selection.id))
     } else {
       setConnections((prev) => prev.filter((c) => c.id !== selection.id))
     }
@@ -463,6 +498,7 @@ function FlowEditor({ storageKey, tabs }) {
 
   function toggleConnectMode(style) {
     setIssueMode(false)
+    setImprovementMode(false)
     setConnectSource(null)
     setSelection(null)
     setConnectMode((prev) => (prev && connectStyle === style ? false : true))
@@ -471,9 +507,18 @@ function FlowEditor({ storageKey, tabs }) {
 
   function toggleIssueMode() {
     setConnectMode(false)
+    setImprovementMode(false)
     setConnectSource(null)
     setSelection(null)
     setIssueMode((prev) => !prev)
+  }
+
+  function toggleImprovementMode() {
+    setConnectMode(false)
+    setIssueMode(false)
+    setConnectSource(null)
+    setSelection(null)
+    setImprovementMode((prev) => !prev)
   }
 
   function handleToolDragStart(e, type) {
@@ -511,18 +556,18 @@ function FlowEditor({ storageKey, tabs }) {
   }
 
   function handleCanvasMouseDown(e) {
-    if (!issueMode) return
+    if (!issueMode && !improvementMode) return
     // Elements/connections/lanes already no-op their own mousedown handlers while
-    // issueMode is active, so any mousedown that reaches here (svg background, a
-    // lane rect, or an element/connection that skipped its own handler) should
-    // start a new issue frame, wherever it was drawn from.
+    // issueMode/improvementMode is active, so any mousedown that reaches here (svg
+    // background, a lane rect, or an element/connection that skipped its own
+    // handler) should start a new frame, wherever it was drawn from.
     const { x, y } = getCanvasPoint(e)
     setSelection(null)
-    setDrag({ kind: 'issue-draw', startX: x, startY: y })
+    setDrag({ kind: issueMode ? 'issue-draw' : 'improvement-draw', startX: x, startY: y })
   }
 
   function handleElementMouseDown(e, el) {
-    if (connectMode || issueMode) return
+    if (connectMode || issueMode || improvementMode) return
     e.stopPropagation()
     setSelection({ kind: 'element', id: el.id })
     const { x, y } = getCanvasPoint(e)
@@ -553,7 +598,7 @@ function FlowEditor({ storageKey, tabs }) {
   }
 
   function handleConnectionMouseDown(e, conn) {
-    if (connectMode || issueMode) return
+    if (connectMode || issueMode || improvementMode) return
     e.stopPropagation()
     setSelection({ kind: 'connection', id: conn.id })
     const from = elements.find((el) => el.id === conn.from)
@@ -577,7 +622,7 @@ function FlowEditor({ storageKey, tabs }) {
   }
 
   function handleLaneClick(e, lane) {
-    if (connectMode || issueMode) return
+    if (connectMode || issueMode || improvementMode) return
     e.stopPropagation()
     setSelection({ kind: 'lane', id: lane.id })
   }
@@ -590,7 +635,7 @@ function FlowEditor({ storageKey, tabs }) {
   }
 
   function handleLaneResizeMouseDown(e, lane) {
-    if (connectMode || issueMode) return
+    if (connectMode || issueMode || improvementMode) return
     e.stopPropagation()
     setSelection({ kind: 'lane', id: lane.id })
     const { x: startX, y: startY } = getCanvasPoint(e)
@@ -598,13 +643,13 @@ function FlowEditor({ storageKey, tabs }) {
   }
 
   function handleIssueClick(e, issue) {
-    if (issueMode) return
+    if (issueMode || improvementMode) return
     e.stopPropagation()
     setSelection({ kind: 'issue', id: issue.id })
   }
 
   function handleIssueMouseDown(e, issue) {
-    if (issueMode) return
+    if (issueMode || improvementMode) return
     e.stopPropagation()
     setSelection({ kind: 'issue', id: issue.id })
     const { x, y } = getCanvasPoint(e)
@@ -616,6 +661,34 @@ function FlowEditor({ storageKey, tabs }) {
     setEditingId(issue.id)
     setEditingKind('issue')
     setEditingValue(issue.label || '')
+  }
+
+  function handleImprovementClick(e, improvement) {
+    if (issueMode || improvementMode) return
+    e.stopPropagation()
+    setSelection({ kind: 'improvement', id: improvement.id })
+  }
+
+  function handleImprovementMouseDown(e, improvement) {
+    if (issueMode || improvementMode) return
+    e.stopPropagation()
+    setSelection({ kind: 'improvement', id: improvement.id })
+    const { x, y } = getCanvasPoint(e)
+    setDrag({
+      kind: 'improvement-move',
+      id: improvement.id,
+      offsetX: x - improvement.x,
+      offsetY: y - improvement.y,
+      startX: x,
+      startY: y,
+    })
+  }
+
+  function handleImprovementDoubleClick(e, improvement) {
+    e.stopPropagation()
+    setEditingId(improvement.id)
+    setEditingKind('improvement')
+    setEditingValue(improvement.label || '')
   }
 
   function updateElement(id, patch) {
@@ -634,6 +707,10 @@ function FlowEditor({ storageKey, tabs }) {
     setIssues((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)))
   }
 
+  function updateImprovement(id, patch) {
+    setImprovements((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)))
+  }
+
   function commitEdit() {
     if (editingKind === 'element') {
       setElements((prev) => prev.map((el) => (el.id === editingId ? { ...el, label: editingValue } : el)))
@@ -643,6 +720,8 @@ function FlowEditor({ storageKey, tabs }) {
       setLanes((prev) => prev.map((l) => (l.id === editingId ? { ...l, label: editingValue } : l)))
     } else if (editingKind === 'issue') {
       setIssues((prev) => prev.map((i) => (i.id === editingId ? { ...i, label: editingValue } : i)))
+    } else if (editingKind === 'improvement') {
+      setImprovements((prev) => prev.map((i) => (i.id === editingId ? { ...i, label: editingValue } : i)))
     }
     setEditingId(null)
     setEditingKind(null)
@@ -692,7 +771,7 @@ ${data}`
   }
 
   function handleExportJson() {
-    const data = JSON.stringify({ elements, connections, lanes, annualCount, issues }, null, 2)
+    const data = JSON.stringify({ elements, connections, lanes, annualCount, issues, improvements }, null, 2)
     const blob = new Blob([data], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -729,6 +808,7 @@ ${data}`
           setLanes(parsed.lanes ?? [])
           setAnnualCount(parsed.annualCount ?? 0)
           setIssues(parsed.issues ?? [])
+          setImprovements(parsed.improvements ?? [])
           setSelection(null)
         } else {
           alert('JSONの形式が不正です')
@@ -747,7 +827,8 @@ ${data}`
       connections.length === 0 &&
       lanes.length === 0 &&
       annualCount === 0 &&
-      issues.length === 0
+      issues.length === 0 &&
+      improvements.length === 0
     )
       return
     if (!window.confirm('全ての要素を削除しますか？')) return
@@ -756,6 +837,7 @@ ${data}`
     setLanes([])
     setAnnualCount(0)
     setIssues([])
+    setImprovements([])
     setSelection(null)
   }
 
@@ -776,6 +858,8 @@ ${data}`
   const selectedElement = selection?.kind === 'element' ? elements.find((el) => el.id === selection.id) : null
   const selectedLane = selection?.kind === 'lane' ? lanes.find((l) => l.id === selection.id) : null
   const selectedIssue = selection?.kind === 'issue' ? issues.find((i) => i.id === selection.id) : null
+  const selectedImprovement =
+    selection?.kind === 'improvement' ? improvements.find((i) => i.id === selection.id) : null
 
   let laneOffset = 0
   const laneLayouts = lanes.map((lane) => {
@@ -789,6 +873,12 @@ ${data}`
 
   const editingIssue = editingKind === 'issue' ? issues.find((i) => i.id === editingId) : null
   const issueEditPos = editingIssue ? { x: editingIssue.x, y: Math.max(0, editingIssue.y - 26) } : null
+
+  const editingImprovement =
+    editingKind === 'improvement' ? improvements.find((i) => i.id === editingId) : null
+  const improvementEditPos = editingImprovement
+    ? { x: editingImprovement.x, y: Math.max(0, editingImprovement.y - 26) }
+    : null
 
   return (
     <div className="bpmn-editor">
@@ -829,6 +919,9 @@ ${data}`
         </div>
       )}
       {issueMode && <div className="bpmn-hint">ドラッグして課題の範囲を赤枠で囲んでください</div>}
+      {improvementMode && (
+        <div className="bpmn-hint">ドラッグして改善内容の範囲を青枠で囲んでください</div>
+      )}
 
       <div className="bpmn-body">
         <aside className="bpmn-sidebar">
@@ -888,6 +981,13 @@ ${data}`
             >
               課題を追加
             </button>
+            <button
+              type="button"
+              className={`bpmn-tool-action${improvementMode ? ' active' : ''}`}
+              onClick={toggleImprovementMode}
+            >
+              改善内容を追加
+            </button>
             <button type="button" className="bpmn-tool-action" onClick={deleteSelection} disabled={!selection}>
               削除
             </button>
@@ -910,7 +1010,7 @@ ${data}`
             className={`bpmn-canvas${dropHover ? ' drop-hover' : ''}`}
             width={CANVAS_WIDTH}
             height={CANVAS_HEIGHT}
-            style={{ cursor: issueMode ? 'crosshair' : undefined }}
+            style={{ cursor: issueMode || improvementMode ? 'crosshair' : undefined }}
             onClick={handleCanvasClick}
             onMouseDown={handleCanvasMouseDown}
             onDragOver={handleCanvasDragOver}
@@ -1136,7 +1236,7 @@ ${data}`
                     onMouseDown={(e) => handleIssueMouseDown(e, issue)}
                     onClick={(e) => handleIssueClick(e, issue)}
                     onDoubleClick={(e) => handleIssueDoubleClick(e, issue)}
-                    style={{ cursor: issueMode ? 'crosshair' : 'move' }}
+                    style={{ cursor: issueMode || improvementMode ? 'crosshair' : 'move' }}
                   />
                   <rect
                     x={issue.x}
@@ -1166,6 +1266,58 @@ ${data}`
                 height={issueDraft.height}
                 fill="rgba(225,29,72,0.08)"
                 stroke="#e11d48"
+                strokeWidth={2}
+                strokeDasharray="6 3"
+                style={{ pointerEvents: 'none' }}
+              />
+            )}
+
+            {improvements.map((improvement) => {
+              const isSelected = selection?.kind === 'improvement' && selection.id === improvement.id
+              const color = isSelected ? '#1d4ed8' : '#2563eb'
+              return (
+                <g key={improvement.id}>
+                  <rect
+                    x={improvement.x}
+                    y={improvement.y}
+                    width={improvement.width}
+                    height={improvement.height}
+                    fill="none"
+                    stroke="rgba(0,0,0,0.01)"
+                    strokeWidth={14}
+                    onMouseDown={(e) => handleImprovementMouseDown(e, improvement)}
+                    onClick={(e) => handleImprovementClick(e, improvement)}
+                    onDoubleClick={(e) => handleImprovementDoubleClick(e, improvement)}
+                    style={{ cursor: issueMode || improvementMode ? 'crosshair' : 'move' }}
+                  />
+                  <rect
+                    x={improvement.x}
+                    y={improvement.y}
+                    width={improvement.width}
+                    height={improvement.height}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth={isSelected ? 3 : 2.5}
+                    strokeDasharray="6 3"
+                    style={{ pointerEvents: 'none' }}
+                  />
+                  {improvement.label && editingId !== improvement.id && (
+                    <text x={improvement.x} y={improvement.y - 8} className="bpmn-improvement-label">
+                      {improvement.label}
+                    </text>
+                  )}
+                </g>
+              )
+            })}
+
+            {improvementDraft && (
+              <rect
+                x={improvementDraft.x}
+                y={improvementDraft.y}
+                width={improvementDraft.width}
+                height={improvementDraft.height}
+                fill="rgba(37,99,235,0.08)"
+                stroke="#2563eb"
                 strokeWidth={2}
                 strokeDasharray="6 3"
                 style={{ pointerEvents: 'none' }}
@@ -1229,6 +1381,25 @@ ${data}`
             <textarea
               className="bpmn-label-input"
               style={{ left: issueEditPos.x, top: issueEditPos.y, width: Math.max(editingIssue.width, 100) }}
+              rows={2}
+              autoFocus
+              value={editingValue}
+              onChange={(e) => setEditingValue(e.target.value)}
+              onBlur={commitEdit}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') cancelEdit()
+              }}
+            />
+          )}
+
+          {editingImprovement && improvementEditPos && (
+            <textarea
+              className="bpmn-label-input"
+              style={{
+                left: improvementEditPos.x,
+                top: improvementEditPos.y,
+                width: Math.max(editingImprovement.width, 100),
+              }}
               rows={2}
               autoFocus
               value={editingValue}
@@ -1384,6 +1555,42 @@ ${data}`
                   label="Y座標"
                   value={Math.round(selectedIssue.y)}
                   onCommit={(y) => updateIssue(selectedIssue.id, { y })}
+                />
+              </>
+            )}
+
+            {selectedImprovement && (
+              <>
+                <div className="bpmn-properties-type bpmn-properties-type-improvement">改善内容</div>
+                <label className="bpmn-properties-field">
+                  <span>内容</span>
+                  <textarea
+                    rows={3}
+                    value={selectedImprovement.label}
+                    onChange={(e) => updateImprovement(selectedImprovement.id, { label: e.target.value })}
+                  />
+                </label>
+                <NumberField
+                  label="幅"
+                  min={IMPROVEMENT_MIN_SIZE}
+                  value={selectedImprovement.width}
+                  onCommit={(width) => updateImprovement(selectedImprovement.id, { width })}
+                />
+                <NumberField
+                  label="高さ"
+                  min={IMPROVEMENT_MIN_SIZE}
+                  value={selectedImprovement.height}
+                  onCommit={(height) => updateImprovement(selectedImprovement.id, { height })}
+                />
+                <NumberField
+                  label="X座標"
+                  value={Math.round(selectedImprovement.x)}
+                  onCommit={(x) => updateImprovement(selectedImprovement.id, { x })}
+                />
+                <NumberField
+                  label="Y座標"
+                  value={Math.round(selectedImprovement.y)}
+                  onCommit={(y) => updateImprovement(selectedImprovement.id, { y })}
                 />
               </>
             )}

@@ -327,6 +327,14 @@
   user-select: none;
 }
 
+.bpmn-improvement-label {
+  font-size: 12px;
+  font-weight: 600;
+  fill: #2563eb;
+  pointer-events: none;
+  user-select: none;
+}
+
 .bpmn-lane-label {
   font-size: 12px;
   font-weight: 600;
@@ -367,6 +375,11 @@
 .bpmn-properties-type-issue {
   color: #e11d48;
   background: #fef2f4;
+}
+
+.bpmn-properties-type-improvement {
+  color: #2563eb;
+  background: #eff6ff;
 }
 
 .bpmn-properties-field {
