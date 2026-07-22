@@ -1263,6 +1263,16 @@ ${data}`
                         </text>
                       )
                     })()}
+                  {el.type === 'task' && el.time > 0 && editingId !== el.id && (
+                    <text
+                      x={el.x + el.width - 6}
+                      y={el.y + el.height - 6}
+                      textAnchor="end"
+                      className="bpmn-time-label"
+                    >
+                      {el.time}分
+                    </text>
+                  )}
                 </g>
               )
             })}
@@ -1492,6 +1502,14 @@ ${data}`
                     onChange={(e) => updateElement(selectedElement.id, { label: e.target.value })}
                   />
                 </label>
+                {selectedElement.type === 'task' && (
+                  <NumberField
+                    label="時間(分)"
+                    min={0}
+                    value={selectedElement.time ?? 0}
+                    onCommit={(time) => updateElement(selectedElement.id, { time })}
+                  />
+                )}
                 {selectedElement.type === 'startEvent' || selectedElement.type === 'endEvent' ? (
                   <NumberField
                     label="サイズ"
@@ -1514,14 +1532,6 @@ ${data}`
                       onCommit={(height) => updateElement(selectedElement.id, { height })}
                     />
                   </>
-                )}
-                {selectedElement.type === 'task' && (
-                  <NumberField
-                    label="時間(分)"
-                    min={0}
-                    value={selectedElement.time ?? 0}
-                    onCommit={(time) => updateElement(selectedElement.id, { time })}
-                  />
                 )}
                 <NumberField
                   label="X座標"

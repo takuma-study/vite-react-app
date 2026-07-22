@@ -319,6 +319,14 @@
   user-select: none;
 }
 
+.bpmn-time-label {
+  font-size: 10px;
+  font-weight: 700;
+  fill: #d97706;
+  pointer-events: none;
+  user-select: none;
+}
+
 .bpmn-issue-label {
   font-size: 12px;
   font-weight: 600;
