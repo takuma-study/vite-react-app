@@ -360,6 +360,13 @@ function FlowEditor({ storageKey, tabs }) {
         return
       }
 
+      if (drag.kind === 'issue-move') {
+        setIssues((prev) =>
+          prev.map((i) => (i.id === drag.id ? { ...i, x: x - drag.offsetX, y: y - drag.offsetY } : i)),
+        )
+        return
+      }
+
       setElements((prev) =>
         prev.map((el) =>
           el.id === drag.id ? { ...el, x: x - drag.offsetX, y: y - drag.offsetY } : el,
@@ -594,6 +601,14 @@ function FlowEditor({ storageKey, tabs }) {
     if (issueMode) return
     e.stopPropagation()
     setSelection({ kind: 'issue', id: issue.id })
+  }
+
+  function handleIssueMouseDown(e, issue) {
+    if (issueMode) return
+    e.stopPropagation()
+    setSelection({ kind: 'issue', id: issue.id })
+    const { x, y } = getCanvasPoint(e)
+    setDrag({ kind: 'issue-move', id: issue.id, offsetX: x - issue.x, offsetY: y - issue.y, startX: x, startY: y })
   }
 
   function handleIssueDoubleClick(e, issue) {
@@ -1118,9 +1133,10 @@ ${data}`
                     fill="none"
                     stroke="rgba(0,0,0,0.01)"
                     strokeWidth={14}
+                    onMouseDown={(e) => handleIssueMouseDown(e, issue)}
                     onClick={(e) => handleIssueClick(e, issue)}
                     onDoubleClick={(e) => handleIssueDoubleClick(e, issue)}
-                    style={{ cursor: issueMode ? 'crosshair' : 'pointer' }}
+                    style={{ cursor: issueMode ? 'crosshair' : 'move' }}
                   />
                   <rect
                     x={issue.x}
