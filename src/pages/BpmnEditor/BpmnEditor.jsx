@@ -5,6 +5,7 @@ import './BpmnEditor.css'
 const LEGACY_STORAGE_KEY = 'bpmn-editor-data'
 const FLOW_TABS = [
   { key: 'current', label: '現在フロー', storageKey: 'bpmn-editor-data-current' },
+  { key: 'issue', label: '課題付与フロー', storageKey: 'bpmn-editor-data-issue' },
   { key: 'improved', label: '改善後フロー', storageKey: 'bpmn-editor-data-improved' },
 ]
 const CANVAS_WIDTH = 1800
