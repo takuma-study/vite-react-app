@@ -1,124 +1,100 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import reactLogo from '../../assets/react.svg'
-import viteLogo from '../../assets/vite.svg'
-import heroImg from '../../assets/hero.png'
 import './Home.css'
 
-function Home() {
-  const [count, setCount] = useState(0)
+function FlowPreview() {
+  return (
+    <svg className="home-flow-svg" viewBox="0 0 560 220" role="presentation" aria-hidden="true">
+      <defs>
+        <marker id="home-arrow" markerWidth="8" markerHeight="8" refX="6" refY="2.5" orient="auto">
+          <path d="M0,0 L0,5 L7,2.5 z" fill="var(--text)" />
+        </marker>
+      </defs>
 
+      <circle cx="40" cy="110" r="16" fill="none" stroke="var(--text)" strokeWidth="1.5" />
+
+      <line x1="56" y1="110" x2="118" y2="110" stroke="var(--text)" strokeWidth="1.5" markerEnd="url(#home-arrow)" />
+      <rect x="122" y="86" width="110" height="48" rx="8" fill="var(--bg)" stroke="var(--text)" strokeWidth="1.5" />
+      <text x="177" y="114" textAnchor="middle" className="home-flow-label">受付処理</text>
+
+      <line x1="232" y1="110" x2="294" y2="110" stroke="var(--text)" strokeWidth="1.5" markerEnd="url(#home-arrow)" />
+      <rect x="298" y="86" width="110" height="48" rx="8" fill="var(--bg)" stroke="var(--text)" strokeWidth="1.5" />
+      <text x="353" y="114" textAnchor="middle" className="home-flow-label">承認待ち</text>
+
+      <line x1="408" y1="110" x2="470" y2="110" stroke="var(--text)" strokeWidth="1.5" markerEnd="url(#home-arrow)" />
+      <circle cx="500" cy="110" r="16" fill="none" stroke="var(--text)" strokeWidth="3" />
+
+      <rect
+        x="286"
+        y="72"
+        width="134"
+        height="76"
+        rx="10"
+        fill="none"
+        stroke="#e11d48"
+        strokeWidth="2"
+        strokeDasharray="6 4"
+      />
+      <text x="353" y="60" textAnchor="middle" className="home-flow-issue">課題：待ち時間が長い</text>
+
+      <rect
+        x="110"
+        y="150"
+        width="222"
+        height="48"
+        rx="10"
+        fill="none"
+        stroke="#2563eb"
+        strokeWidth="2"
+        strokeDasharray="6 4"
+      />
+      <text x="221" y="184" textAnchor="middle" className="home-flow-improve">改善：承認を自動化して短縮</text>
+    </svg>
+  )
+}
+
+function Home() {
   return (
     <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-        <Link to="/editor" className="bpmn-cta">
-          BPMN図エディタを開く
+      <section className="home-hero">
+        <span className="home-badge">AI × 業務フロー改善</span>
+        <h1>
+          フローを描くだけで、
+          <br />
+          AIが業務改善を提案する。
+        </h1>
+        <p className="home-lead">
+          現在の業務フローを図にするだけで、AIが課題を見つけ、改善後のフローまで一緒に考えてくれます。
+        </p>
+        <Link to="/editor" className="home-cta">
+          フロー図エディタを開く →
         </Link>
       </section>
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
+      <section className="home-preview">
+        <div className="home-preview-card">
+          <FlowPreview />
         </div>
       </section>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
+      <section className="home-steps">
+        <div className="home-steps-inner">
+          <div className="home-step">
+            <div className="home-step-num">1</div>
+            <h2>現在フロー</h2>
+            <p>スイムレーンやタスクを配置して、今の業務の流れをそのまま図にします。</p>
+          </div>
+          <div className="home-step">
+            <div className="home-step-num">2</div>
+            <h2>課題付与フロー</h2>
+            <p>フローをAIに送るだけで、ボトルネックや無駄な工程を赤枠で指摘してもらえます。</p>
+          </div>
+          <div className="home-step">
+            <div className="home-step-num">3</div>
+            <h2>改善後フロー</h2>
+            <p>AIが考えた改善後のフローと変更点を青枠で受け取り、そのまま取り込めます。</p>
+          </div>
+        </div>
+      </section>
     </>
   )
 }
